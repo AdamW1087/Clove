@@ -1,12 +1,26 @@
+import scala.sys.process.*
+
 val scala3Version = "3.8.1"
 
 lazy val root = project
   .in(file("."))
   .settings(
-    name := "DSL",
-    version := "0.1.0-SNAPSHOT",
-
+    name := "Clove",
+    version := "0.0.1",
     scalaVersion := scala3Version,
 
-    libraryDependencies += "org.scalameta" %% "munit" % "1.0.0" % Test
+    libraryDependencies += "com.lihaoyi" %% "os-lib" % "0.10.0",
+
+    libraryDependencies += "org.scalameta" %% "munit" % "1.0.0" % Test,
+
+    Compile / run / fork := true,
+
+    (Compile / run) := {
+      (Compile / run).evaluated
+      val cmd = sys.props("os.name").toLowerCase() match {
+        case osName if osName contains "windows" => Seq("cmd", "/C", "love", "output")
+        case _ => Seq("love", "output")
+      }
+      cmd.!
+    }
   )
