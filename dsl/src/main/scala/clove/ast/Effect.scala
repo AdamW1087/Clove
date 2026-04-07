@@ -5,5 +5,5 @@ enum Effect:
   case SetState(entity: Expr, key: String, value: Expr)
   case GetState(entity: Expr, key: String, result: String)
   case Draw(entity: Expr)
-  case Spawn(entity: Expr)
+  case Spawn(entity: Expr, withGravity: Boolean = false)
   case Despawn(entity: Expr)

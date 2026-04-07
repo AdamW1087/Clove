@@ -12,8 +12,8 @@ def move(entity: Expr, dx: Double, dy: Double)(using b: ScriptBuilder): Unit =
 def draw(entity: Expr)(using b: ScriptBuilder): Unit =
   b += Script.Perform(Effect.Draw(entity))
 
-def spawn(entity: Expr)(using b: ScriptBuilder): Unit =
-  b += Script.Perform(Effect.Spawn(entity))
+def spawn(entity: Expr, withGravity: Boolean = false)(using b: ScriptBuilder): Unit =
+  b += Script.Perform(Effect.Spawn(entity, withGravity))
 
 def despawn(entity: Expr)(using b: ScriptBuilder): Unit =
   b += Script.Perform(Effect.Despawn(entity))
@@ -32,3 +32,9 @@ def loop(body: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): Unit =
 
 def withHandler(handler: Handler)(body: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): Unit =
   b += Script.WithHandler(handler, script(body))
+
+def region(x: Double, y: Double, w: Double, h: Double,
+           color: (Double, Double, Double) = (1.0, 1.0, 1.0))
+          (handlers: Handler*)
+          (using b: WorldBuilder): Unit =
+  b.addRegion(Region(x, y, w, h, color._1, color._2, color._3, handlers.toList))

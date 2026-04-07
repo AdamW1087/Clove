@@ -50,8 +50,9 @@ object LuaEmitter:
   def emitEffect(effect: Effect, indent: Int): String =
     val pad = "  " * indent
     effect match
-      case Effect.Spawn(entity) =>
-        s"${pad}handler.spawn(${emitExprAsString(entity)})"
+      case Effect.Spawn(entity, withGravity) =>
+        val name = emitExprAsString(entity)
+        s"${pad}handler.spawn($name, $withGravity)"
       
       case Effect.Despawn(entity) =>
         s"${pad}handler.despawn(${emitExprAsString(entity)})"

@@ -19,3 +19,15 @@ def script(body: ScriptBuilder ?=> Unit): Script =
   val builder = ScriptBuilder()
   body(using builder)
   builder.build()
+
+
+case class World(setup: Script, regions: List[Region])
+
+class WorldBuilder extends ScriptBuilder:
+  val regions = ListBuffer[Region]()
+  def addRegion(r: Region): Unit = regions += r
+
+def world(body: WorldBuilder ?=> Unit): World =
+  val builder = WorldBuilder()
+  body(using builder)
+  World(builder.build(), builder.regions.toList)
