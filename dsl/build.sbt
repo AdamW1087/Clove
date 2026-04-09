@@ -2,12 +2,16 @@ import scala.sys.process.*
 
 val scala3Version = "3.8.1"
 
+addCommandAlias("play", "run")
+
 lazy val root = project
   .in(file("."))
   .settings(
     name := "Clove",
     version := "0.0.1",
     scalaVersion := scala3Version,
+
+    scalacOptions ++= Seq("-feature", "-language:implicitConversions"),
 
     libraryDependencies += "com.lihaoyi" %% "os-lib" % "0.10.0",
 

@@ -1,9 +1,12 @@
 package clove.ast
 
 enum Effect:
-  case Move(entity: Expr, dx: Expr, dy: Expr)
-  case SetState(entity: Expr, key: String, value: Expr)
-  case GetState(entity: Expr, key: String, result: String)
-  case Draw(entity: Expr)
-  case Spawn(entity: Expr, withGravity: Boolean = false)
-  case Despawn(entity: Expr)
+  case Move(dx: Expr, dy: Expr)
+  case Jump()
+  case ApplyGravity()
+  case Spawn()
+  case Despawn()
+  case Draw()
+  case SetState(key: String, value: Expr)
+  case GetState(key: String)
+  case Collides(target: Expr)

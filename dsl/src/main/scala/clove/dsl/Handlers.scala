@@ -5,5 +5,6 @@ import clove.ast.*
 def gravityHandler(strength: Double): Handler =
   Handler("gravityHandler", Map("Gravity" -> Expr.Num(strength)))
 
+// TODO
 def speedHandler(speed: Double): Handler =
   Handler("speedHandler", Map("Speed" -> Expr.Num(speed)))

@@ -5,84 +5,74 @@ import clove.ast.*
 object LuaEmitter:
 
   def emitExpr(expr: Expr): String = expr match
-    case Expr.Num(v)            => v.toString
-    case Expr.Str(v)            => s"\"$v\""
-    case Expr.Bool(v)           => v.toString
-    case Expr.Var(name)         => name
-    case Expr.BinOp(op, l, r)  => s"(${emitExpr(l)} $op ${emitExpr(r)})"
-    case Expr.Not(e)            => s"not (${emitExpr(e)})"
-    case Expr.KeyDown(key) => s"love.keyboard.isDown(\"$key\")"
-    case Expr.Collides(a, b) => 
-      s"checkCollision(entities[${emitExprAsString(a)}], entities[${emitExprAsString(b)}])"
-
-  def emitScript(script: Script, indent: Int = 0): String =
-    val pad = "  " * indent
-    script match
-      case Script.Noop =>
-        ""
-
-      case Script.Return(value) =>
-        s"${pad}return ${emitExpr(value)}"
-
-      case Script.Perform(effect) =>
-        emitEffect(effect, indent)
-
-      case Script.Seq(first, second) =>
-        val f = emitScript(first, indent)
-        val s = emitScript(second, indent)
-        if f.isEmpty then s
-        else if s.isEmpty then f
-        else s"$f\n$s"
-
-      case Script.When(cond, body) =>
-        s"""${pad}if ${emitExpr(cond)} then
-           |${emitScript(body, indent + 1)}
-           |${pad}end""".stripMargin
-
-      case Script.Loop(body) =>
-        s"""${pad}while true do
-           |${emitScript(body, indent + 1)}
-           |${pad}end""".stripMargin
-
-      case Script.WithHandler(handler, body) =>
-        emitScoped(handler, body, indent)
-
-  def emitEffect(effect: Effect, indent: Int): String =
-    val pad = "  " * indent
-    effect match
-      case Effect.Spawn(entity, withGravity) =>
-        val name = emitExprAsString(entity)
-        s"${pad}handler.spawn($name, $withGravity)"
-      
-      case Effect.Despawn(entity) =>
-        s"${pad}handler.despawn(${emitExprAsString(entity)})"
-      
-      case Effect.Move(entity, dx, dy) =>
-        s"${pad}handler.move(${emitExprAsString(entity)}, ${emitExpr(dx)}, ${emitExpr(dy)})"
-      
-      case Effect.Draw(entity) =>
-        s"${pad}handler.draw(${emitExprAsString(entity)})"
-      
-      case Effect.SetState(entity, key, value) =>
-        s"${pad}handler.setState(${emitExprAsString(entity)}, \"$key\", ${emitExpr(value)})"
-      
-      case Effect.GetState(entity, key, result) =>
-        s"${pad}local $result = handler.getState(${emitExprAsString(entity)}, \"$key\")"
+    case Expr.Num(v)          => v.toString
+    case Expr.Str(v)          => s"\"$v\""
+    case Expr.Bool(v)         => v.toString
+    case Expr.Var(name)       => name
+    case Expr.BinOp(op, l, r) => s"(${emitExpr(l)} $op ${emitExpr(r)})"
+    case Expr.Not(e)          => s"not (${emitExpr(e)})"
+    case Expr.KeyDown(key)    => s"love.keyboard.isDown(\"$key\")"
 
   def emitExprAsString(expr: Expr): String = expr match
     case Expr.Var(name) => s"\"$name\""
     case other          => emitExpr(other)
 
-
-  def emitScoped(handler: Handler, body: Script, indent: Int): String =
+  def emitStatement(stmt: Statement, indent: Int): String =
     val pad = "  " * indent
-    val overrides = handler.handles.map { (k, v) =>
-      s"${pad}  $k = ${emitExpr(v)}"
-    }.mkString(",\n")
+    stmt match
+      case Bind(varName, effect) =>
+        s"${pad}local $varName = ${emitYield(effect)}"
 
-    s"""${pad}local ${handler.name} = {
-       |$overrides
-       |${pad}}
-       |${pad}do
-       |${emitScript(body, indent + 1)}
-       |${pad}end""".stripMargin
+      case Perform(effect) =>
+        s"${pad}${emitYield(effect)}"
+
+      case If(cond, thenBranch) =>
+        s"""${pad}if ${emitExpr(cond)} then
+           |${emitScript(thenBranch, indent + 1)}
+           |${pad}end""".stripMargin
+
+      case Loop(body) => // TODO
+        s"""${pad}while true do
+           |${emitScript(body, indent + 1)}
+           |${pad}end""".stripMargin
+
+      case Return(value) => // TODO
+        s"${pad}return ${emitExpr(value)}"
+
+      case Noop => // TODO
+        ""
+
+  def emitYield(effect: Effect): String = effect match
+    case Effect.Move(dx, dy)     => s"coroutine.yield(\"Move\", ${emitExpr(dx)}, ${emitExpr(dy)})"
+    case Effect.Jump()           => s"coroutine.yield(\"Jump\")"
+    case Effect.ApplyGravity()   => s"coroutine.yield(\"ApplyGravity\")"
+    case Effect.Spawn()          => s"coroutine.yield(\"Spawn\")"
+    case Effect.Despawn()        => s"coroutine.yield(\"Despawn\")"
+    case Effect.Draw()           => s"coroutine.yield(\"Draw\")"
+    case Effect.SetState(key, v) => s"coroutine.yield(\"SetState\", \"$key\", ${emitExpr(v)})"
+    case Effect.GetState(key)    => s"coroutine.yield(\"GetState\", \"$key\")"
+    case Effect.Collides(target) => s"coroutine.yield(\"Collides\", ${emitExprAsString(target)})"
+
+  def emitScript(script: Script, indent: Int = 0): String =
+    script.statements
+      .map(emitStatement(_, indent))
+      .filter(_.nonEmpty)
+      .mkString("\n")
+
+  def emitCoroutine(entityId: String, script: Script): String =
+    s"""coroutine.create(function()
+       |  -- script for $entityId
+       |  while true do
+       |${emitScript(script, indent = 2)}
+       |    coroutine.yield()
+       |  end
+       |end)""".stripMargin
+
+  def emitSpawnScript(entityId: String, script: Script): String =
+    script.statements.map {
+      case Bind(_, Effect.SetState(key, value)) =>
+        s"  entities[\"$entityId\"][\"$key\"] = ${emitExpr(value)}"
+      case Perform(Effect.SetState(key, value)) =>
+        s"  entities[\"$entityId\"][\"$key\"] = ${emitExpr(value)}"
+      case _ => ""
+    }.filter(_.nonEmpty).mkString("\n")

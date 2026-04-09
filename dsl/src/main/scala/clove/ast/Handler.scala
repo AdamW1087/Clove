@@ -2,5 +2,5 @@ package clove.ast
 
 case class Handler(
   name: String,
-  handles: Map[String, Expr]
+  handles: Map[String, Expr] // TODO -transformation logic (custom handlers)
 )

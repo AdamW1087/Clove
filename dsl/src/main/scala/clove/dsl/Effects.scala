@@ -2,39 +2,49 @@ package clove.dsl
 
 import clove.ast.*
 
-def keyDown(key: String): Expr = Expr.KeyDown(key)
+def perform(effect: Effect)(using b: ScriptBuilder): Expr =
+  val varName = b.nextVar()
+  b += Bind(varName, effect)
+  Expr.Var(varName)
 
-def collides(a: Expr, b: Expr): Expr = Expr.Collides(a, b)
+def move(dx: Double, dy: Double)(using b: ScriptBuilder): Expr =
+  perform(Effect.Move(Expr.Num(dx), Expr.Num(dy)))
 
-def move(entity: Expr, dx: Double, dy: Double)(using b: ScriptBuilder): Unit =
-  b += Script.Perform(Effect.Move(entity, Expr.Num(dx), Expr.Num(dy)))
+def jump()(using b: ScriptBuilder): Expr =
+  perform(Effect.Jump())
 
-def draw(entity: Expr)(using b: ScriptBuilder): Unit =
-  b += Script.Perform(Effect.Draw(entity))
+def spawn(entity: Entity)(using b: WorldBuilder): Unit =
+  b.addEntity(entity)
 
-def spawn(entity: Expr, withGravity: Boolean = false)(using b: ScriptBuilder): Unit =
-  b += Script.Perform(Effect.Spawn(entity, withGravity))
+def despawn()(using b: ScriptBuilder): Expr =
+  perform(Effect.Despawn())
 
-def despawn(entity: Expr)(using b: ScriptBuilder): Unit =
-  b += Script.Perform(Effect.Despawn(entity))
+// TODO
+def draw()(using b: ScriptBuilder): Expr =
+  perform(Effect.Draw())
 
-def setState(entity: Expr, key: String, value: Expr)(using b: ScriptBuilder): Unit =
-  b += Script.Perform(Effect.SetState(entity, key, value))
+def setState(key: String, value: Expr)(using b: ScriptBuilder): Expr =
+  perform(Effect.SetState(key, value))
 
-def getState(entity: Expr, key: String, result: String)(using b: ScriptBuilder): Unit =
-  b += Script.Perform(Effect.GetState(entity, key, result))
+def getState(key: String)(using b: ScriptBuilder): Expr =
+  perform(Effect.GetState(key))
 
 def when(cond: Expr)(body: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): Unit =
-  b += Script.When(cond, script(body))
+  b += If(cond, script(body))
 
 def loop(body: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): Unit =
-  b += Script.Loop(script(body))
+  b += Loop(script(body))
 
-def withHandler(handler: Handler)(body: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): Unit =
-  b += Script.WithHandler(handler, script(body))
+def keyDown(key: String): Expr =
+  Expr.KeyDown(key)
+
+def collides(target: Expr)(using b: ScriptBuilder): Expr =
+  perform(Effect.Collides(target))
 
 def region(x: Double, y: Double, w: Double, h: Double,
            color: (Double, Double, Double) = (1.0, 1.0, 1.0))
           (handlers: Handler*)
           (using b: WorldBuilder): Unit =
   b.addRegion(Region(x, y, w, h, color._1, color._2, color._3, handlers.toList))
+
+// WithHandler TODO

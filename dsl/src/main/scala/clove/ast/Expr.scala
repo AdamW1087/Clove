@@ -8,4 +8,3 @@ enum Expr:
   case BinOp(op: String, left: Expr, right: Expr)
   case Not(expr: Expr)
   case KeyDown(key: String)
-  case Collides(a: Expr, b: Expr)
