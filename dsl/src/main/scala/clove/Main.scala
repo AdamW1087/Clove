@@ -2,7 +2,6 @@ import clove.dsl.*
 import clove.compiler.*
 import clove.ast.*
 import clove.dsl.given
-// import clove.ast.given
 
 @main def run(): Unit =
 
@@ -15,6 +14,7 @@ import clove.dsl.given
       perform(Effect.ApplyGravity())
       when(keyDown("right"))(move(5.0, 0.0))
       when(keyDown("left"))(move(-5.0, 0.0))
+      when(keyDown("space"))(perform(Effect.Jump()))
     }
 
   val item = entity("item")

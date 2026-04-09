@@ -81,6 +81,12 @@ local function handleApplyGravity(task, entityRegions, dt)
     if e.y + e.height >= GROUND then
       e.y = GROUND - e.height
       e.vy = 0
+      e.grounded = true
+    elseif e.y <= 0 then
+      e.y = 0
+      e.vy = 0
+    else
+      e.grounded = false
     end
   end
 end
@@ -128,21 +134,33 @@ function love.update(dt)
 
       if effect == "ApplyGravity" then
         handleApplyGravity(task, entityRegions, dt)
+
       elseif effect == "Move" then
         handleMove(task, entityRegions, a, b)
+
       elseif effect == "Despawn" then
         entities[task.id] = nil
         task.dead = true
         break
+
       elseif effect == "Collides" then
         response = handleCollides(task, a)
+
       elseif effect == "SetState" then
         if entities[task.id] then
           entities[task.id][a] = b
         end
+
       elseif effect == "GetState" then
         if entities[task.id] then
           response = entities[task.id][a]
+        end
+
+      elseif effect == "Jump" then
+        local e = entities[task.id]
+        if e and e.grounded then
+          e.vy = -5
+          e.grounded = false
         end
       end
 
