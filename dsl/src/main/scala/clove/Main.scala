@@ -2,13 +2,14 @@ import clove.dsl.*
 import clove.compiler.*
 import clove.ast.*
 import clove.dsl.given
+// import clove.ast.given
 
 @main def run(): Unit =
 
   val player = entity("player")
     .onSpawn {
-      setState("x", Expr.Num(100.0))
-      setState("y", Expr.Num(0.0))
+      setState("x", 100.0)
+      setState("y", 0.0)
     }
     .onUpdate {
       perform(Effect.ApplyGravity())
@@ -18,8 +19,8 @@ import clove.dsl.given
 
   val item = entity("item")
     .onSpawn {
-      setState("x", Expr.Num(600.0))
-      setState("y", Expr.Num(0.0))
+      setState("x", 600.0)
+      setState("y", 0.0)
     }
     .onUpdate {
       perform(Effect.ApplyGravity())
