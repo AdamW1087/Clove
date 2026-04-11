@@ -31,6 +31,7 @@ import clove.dsl.given
   val beamGravity = gravityHandler(2.0)
 
   val setup = world {
+    camera(follow = player, threshold = 400, axis = Axis.Horizontal)
     region(200, 0, 300, 600, (0.0, 0.5, 1.0))(beamGravity)
     spawn(player)
     spawn(item)

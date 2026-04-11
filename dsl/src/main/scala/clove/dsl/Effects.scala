@@ -48,3 +48,7 @@ def region(x: Double, y: Double, w: Double, h: Double,
   b.addRegion(Region(x, y, w, h, color._1, color._2, color._3, handlers.toList))
 
 // WithHandler TODO
+
+def camera(follow: Entity, threshold: Double, axis: Axis = Axis.Horizontal)
+          (using b: WorldBuilder): Unit =
+  b.setCamera(CameraConfig(follow, threshold, axis))
