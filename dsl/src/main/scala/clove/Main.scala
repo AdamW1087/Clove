@@ -11,6 +11,7 @@ import clove.dsl.given
       setState("y", 0.0)
     }
     .onUpdate {
+      perform(Effect.Camera())
       perform(Effect.ApplyGravity())
       when(keyDown("right"))(move(5.0, 0.0))
       when(keyDown("left"))(move(-5.0, 0.0))

@@ -41,6 +41,7 @@ object LoveRuntime:
 local entities = {}
 local tasks = {}
 local GROUND = $groundLevel
+local camera = {x = 0, y = 0, follow = nil, threshold = 400}
 
 local regions = {
 $regionTable
@@ -156,6 +157,9 @@ function love.update(dt)
           response = entities[task.id][a]
         end
 
+      elseif effect == "Camera" then
+        camera.follow = task.id
+
       elseif effect == "Jump" then
         local e = entities[task.id]
         if e and e.grounded then
@@ -172,6 +176,13 @@ function love.update(dt)
     end
   end
 
+  if camera.follow then
+    local followed = entities[camera.follow]
+    if followed and followed.x > camera.threshold then
+      camera.x = followed.x - camera.threshold
+    end
+  end
+
   -- clean up dead tasks
   for i = #tasks, 1, -1 do
     if tasks[i].dead then
@@ -183,12 +194,12 @@ end
 function love.draw()
   for _, region in ipairs(regions) do
     love.graphics.setColor(region.r, region.g, region.b, 0.3)
-    love.graphics.rectangle("fill", region.x, region.y, region.w, region.h)
+    love.graphics.rectangle("fill", region.x - camera.x, region.y - camera.y, region.w, region.h)
     love.graphics.setColor(1.0, 1.0, 1.0, 1.0)
   end
   for name, e in pairs(entities) do
     if e then
-      love.graphics.rectangle("fill", e.x, e.y, e.width, e.height)
+      love.graphics.rectangle("fill", e.x - camera.x, e.y - camera.y, e.width, e.height)
     end
   end
 end""".stripMargin

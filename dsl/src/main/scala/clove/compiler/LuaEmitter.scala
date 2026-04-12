@@ -52,6 +52,7 @@ object LuaEmitter:
     case Effect.SetState(key, v) => s"coroutine.yield(\"SetState\", \"$key\", ${emitExpr(v)})"
     case Effect.GetState(key)    => s"coroutine.yield(\"GetState\", \"$key\")"
     case Effect.Collides(target) => s"coroutine.yield(\"Collides\", ${emitExprAsString(target)})"
+    case Effect.Camera()         => s"coroutine.yield(\"Camera\")"
 
   def emitScript(script: Script, indent: Int = 0): String =
     script.statements

@@ -47,4 +47,35 @@ def region(x: Double, y: Double, w: Double, h: Double,
           (using b: WorldBuilder): Unit =
   b.addRegion(Region(x, y, w, h, color._1, color._2, color._3, handlers.toList))
 
+
+// TODO: stack camera (sometimes pressing to swap in doesnt get registered as it is dependant on which task is ran last)
+// tldr: camera swapping doesnt always work
+/*
+  val player = entity("player")
+    .onSpawn {
+      setState("x", 100.0)
+      setState("y", 0.0)
+    }
+    .onUpdate {
+      when(keyDown("down"))(perform(Effect.Camera()))
+      perform(Effect.ApplyGravity())
+      when(keyDown("right"))(move(5.0, 0.0))
+      when(keyDown("left"))(move(-5.0, 0.0))
+      when(keyDown("space"))(perform(Effect.Jump()))
+    }
+
+  val item = entity("item")
+    .onSpawn {
+      setState("x", 600.0)
+      setState("y", 0.0)
+    }
+    .onUpdate {
+      perform(Effect.ApplyGravity())
+      when(keyDown("up"))(perform(Effect.Camera()))
+      val didCollide = collides(player)
+      when(didCollide)(despawn())
+    }
+*/
+def camera()(using b: ScriptBuilder): Expr =
+  perform(Effect.Camera())
 // WithHandler TODO

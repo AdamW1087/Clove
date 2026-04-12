@@ -10,3 +10,4 @@ enum Effect:
   case SetState(key: String, value: Expr)
   case GetState(key: String)
   case Collides(target: Expr)
+  case Camera()
