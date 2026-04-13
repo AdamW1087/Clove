@@ -3,7 +3,7 @@ package clove.ast
 enum Effect:
   case Move(dx: Expr, dy: Expr)
   case Jump()
-  case ApplyGravity()
+  case Gravity()
   case Spawn()
   case Despawn()
   case Draw()

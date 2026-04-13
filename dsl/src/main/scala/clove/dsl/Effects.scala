@@ -58,7 +58,7 @@ def region(x: Double, y: Double, w: Double, h: Double,
     }
     .onUpdate {
       when(keyDown("down"))(perform(Effect.Camera()))
-      perform(Effect.ApplyGravity())
+      perform(Effect.Gravity())
       when(keyDown("right"))(move(5.0, 0.0))
       when(keyDown("left"))(move(-5.0, 0.0))
       when(keyDown("space"))(perform(Effect.Jump()))
@@ -70,7 +70,7 @@ def region(x: Double, y: Double, w: Double, h: Double,
       setState("y", 0.0)
     }
     .onUpdate {
-      perform(Effect.ApplyGravity())
+      perform(Effect.Gravity())
       when(keyDown("up"))(perform(Effect.Camera()))
       val didCollide = collides(player)
       when(didCollide)(despawn())
@@ -78,4 +78,11 @@ def region(x: Double, y: Double, w: Double, h: Double,
 */
 def camera()(using b: ScriptBuilder): Expr =
   perform(Effect.Camera())
-// WithHandler TODO
+
+
+// NOTE: handleWith must be declared before perform(effect)
+def handleWith(handler: Handler)(using b: ScriptBuilder): Unit =
+  b += HandleWith(handler)
+
+def handleWith(handler: Handler)(body: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): Unit =
+  b += HandleWith(handler, script(body))

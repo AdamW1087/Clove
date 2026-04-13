@@ -5,6 +5,8 @@ import clove.dsl.given
 
 @main def run(): Unit =
 
+  val noGravity = handler("Gravity" -> 0.0)
+
   val player = entity("player")
     .onSpawn {
       setState("x", 100.0)
@@ -12,7 +14,11 @@ import clove.dsl.given
     }
     .onUpdate {
       perform(Effect.Camera())
-      perform(Effect.ApplyGravity())
+      
+      when(keyDown("up"))(
+        handleWith(noGravity)
+      )
+      perform(Effect.Gravity())
       when(keyDown("right"))(move(5.0, 0.0))
       when(keyDown("left"))(move(-5.0, 0.0))
       when(keyDown("space"))(perform(Effect.Jump()))
@@ -24,7 +30,7 @@ import clove.dsl.given
       setState("y", 0.0)
     }
     .onUpdate {
-      perform(Effect.ApplyGravity())
+      perform(Effect.Gravity())
       val didCollide = collides(player)
       when(didCollide)(despawn())
     }

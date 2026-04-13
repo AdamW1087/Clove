@@ -39,13 +39,29 @@ object LuaEmitter:
       case Return(value) => // TODO
         s"${pad}return ${emitExpr(value)}"
 
+      case HandleWith(handler, body) if body.statements.isEmpty =>
+        val overrides = handler.handles.map { (k, v) =>
+          s"${k.toLowerCase} = ${LuaEmitter.emitExpr(v)}"
+        }.mkString(", ")
+        val nameComment = handler.name.map(n => s" -- $n").getOrElse("")
+        s"""${pad}coroutine.yield("PushHandler", {$overrides})$nameComment"""
+
+      case HandleWith(handler, body) =>
+        val overrides = handler.handles.map { (k, v) =>
+          s"${k.toLowerCase} = ${LuaEmitter.emitExpr(v)}"
+        }.mkString(", ")
+        val nameComment = handler.name.map(n => s" -- $n").getOrElse("")
+        s"""${pad}coroutine.yield("PushHandler", {$overrides})$nameComment
+           |${emitScript(body, indent)}
+           |${pad}coroutine.yield("PopHandler")""".stripMargin
+
       case Noop => // TODO
         ""
 
   def emitYield(effect: Effect): String = effect match
     case Effect.Move(dx, dy)     => s"coroutine.yield(\"Move\", ${emitExpr(dx)}, ${emitExpr(dy)})"
     case Effect.Jump()           => s"coroutine.yield(\"Jump\")"
-    case Effect.ApplyGravity()   => s"coroutine.yield(\"ApplyGravity\")"
+    case Effect.Gravity()        => s"coroutine.yield(\"Gravity\")"
     case Effect.Spawn()          => s"coroutine.yield(\"Spawn\")"
     case Effect.Despawn()        => s"coroutine.yield(\"Despawn\")"
     case Effect.Draw()           => s"coroutine.yield(\"Draw\")"
@@ -63,6 +79,7 @@ object LuaEmitter:
   def emitCoroutine(entityId: String, script: Script): String =
     s"""coroutine.create(function()
        |  -- script for $entityId
+       |  local task_id = "$entityId"
        |  while true do
        |${emitScript(script, indent = 2)}
        |    coroutine.yield()

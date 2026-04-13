@@ -28,7 +28,7 @@ object LoveRuntime:
     val taskSetup = world.entities
       .filter(_.updateScript.statements.nonEmpty)
       .map { e =>
-        s"""  table.insert(tasks, {id = "${e.name}", co = ${e.name}Script})"""
+        s"""  table.insert(tasks, {id = "${e.name}", co = ${e.name}Script, handlerStack = {}})"""
       }.mkString("\n")
 
     val spawnSetup = world.entities.map { e =>
@@ -72,9 +72,18 @@ local function getCurrentRegion(e)
   return nil
 end
 
-local function handleApplyGravity(task, entityRegions, dt)
-  local region = entityRegions[task.id]
-  local g = region and region.gravity or 9.8
+local function handleGravity(task, entityRegions, dt)
+  local g = nil
+  for i = #task.handlerStack, 1, -1 do
+    if task.handlerStack[i].gravity ~= nil then
+      g = task.handlerStack[i].gravity
+      break
+    end
+  end
+  if g == nil then
+    local region = entityRegions[task.id]
+    g = region and region.gravity or 9.8
+  end
   local e = entities[task.id]
   if e then
     e.vy = (e.vy or 0) + g * dt
@@ -128,13 +137,20 @@ function love.update(dt)
   end
 
   for _, task in ipairs(tasks) do
+    task.handlerStack = {}
     local ok, effect, a, b = coroutine.resume(task.co)
 
     while effect ~= nil do
       local response = nil
 
-      if effect == "ApplyGravity" then
-        handleApplyGravity(task, entityRegions, dt)
+      if effect == "PushHandler" then
+        table.insert(task.handlerStack, a)
+
+      -- elseif effect == "PopHandler" then
+      --   table.remove(task.handlerStack)
+
+      elseif effect == "Gravity" then
+        handleGravity(task, entityRegions, dt)
 
       elseif effect == "Move" then
         handleMove(task, entityRegions, a, b)

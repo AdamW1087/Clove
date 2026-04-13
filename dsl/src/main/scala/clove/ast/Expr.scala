@@ -13,3 +13,6 @@ object Expr:
   given Conversion[Double, Expr] = Expr.Num(_)
   given Conversion[String, Expr] = Expr.Str(_)
   given Conversion[Boolean, Expr] = Expr.Bool(_)
+  given Conversion[(String, Double), (String, Expr)] = (k, v) => (k, Expr.Num(v))
+  given Conversion[(String, Boolean), (String, Expr)] = (k, v) => (k, Expr.Bool(v))
+  given Conversion[(String, String), (String, Expr)] = (k, v) => (k, Expr.Str(v))
