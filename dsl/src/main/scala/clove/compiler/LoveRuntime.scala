@@ -154,9 +154,6 @@ function love.update(dt)
       if effect == "PushHandler" then
         table.insert(task.handlerStack, a)
 
-      -- elseif effect == "PopHandler" then
-      --   table.remove(task.handlerStack)
-
       elseif effect == "Gravity" then
         handleGravity(task, entityRegions, dt)
 

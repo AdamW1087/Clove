@@ -15,6 +15,8 @@ import clove.dsl.given
 
   val highJump = handler("Jump" -> 10.0)
 
+  val speedBoost = handler("Move" -> 2.0)
+
   val player = entity("player")
     .onSpawn {
       setState("x", 100.0)
@@ -22,9 +24,10 @@ import clove.dsl.given
     }
     .onUpdate {
       perform(Effect.Camera())
-      
       when(keyDown("up"))(
-        handleWith(highJump)
+        handleWith(highJump) {
+          when(keyDown("right"))(move(10.0, 0.0))
+        }
       )
       perform(Effect.Gravity())
       when(keyDown("right"))(move(5.0, 0.0))

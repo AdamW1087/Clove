@@ -39,21 +39,14 @@ object LuaEmitter:
       case Return(value) => // TODO
         s"${pad}return ${emitExpr(value)}"
 
-      case HandleWith(handler, body) if body.statements.isEmpty =>
-        val overrides = handler.handles.map { (k, v) =>
-          s"${k.toLowerCase} = ${LuaEmitter.emitExpr(v)}"
-        }.mkString(", ")
-        val nameComment = handler.name.map(n => s" -- $n").getOrElse("")
-        s"""${pad}coroutine.yield("PushHandler", {$overrides})$nameComment"""
-
       case HandleWith(handler, body) =>
         val overrides = handler.handles.map { (k, v) =>
           s"${k.toLowerCase} = ${LuaEmitter.emitExpr(v)}"
         }.mkString(", ")
         val nameComment = handler.name.map(n => s" -- $n").getOrElse("")
-        s"""${pad}coroutine.yield("PushHandler", {$overrides})$nameComment
-           |${emitScript(body, indent)}
-           |${pad}coroutine.yield("PopHandler")""".stripMargin
+        val bodyLua = emitScript(body, indent)
+        val bodySep = if bodyLua.nonEmpty then s"\n$bodyLua" else ""
+        s"""${pad}coroutine.yield("PushHandler", {$overrides})$nameComment$bodySep"""
 
       case Noop => // TODO
         ""
