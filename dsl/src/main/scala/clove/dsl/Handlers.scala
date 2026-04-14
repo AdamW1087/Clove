@@ -3,6 +3,8 @@ package clove.dsl
 import clove.ast.*
 
 
+// TODO: Proper default values
+
 def createHandler(name: Option[String], handles: Map[String, Expr]): Handler =
   Handler(name, handles)
 
@@ -17,6 +19,5 @@ def handler(name: String, handles: (String, Expr)*): Handler =
 def gravityHandler(strength: Double, name: Option[String] = None): Handler =
   createHandler(name, Map("Gravity" -> Expr.Num(strength)))
 
-// TODO: drag
-def speedHandler(speed: Double, name: Option[String] = None): Handler =
-  createHandler(name, Map("Speed" -> Expr.Num(speed)))
+def moveHandler(speed: Double, name: Option[String] = None): Handler =
+  createHandler(name, Map("Move" -> Expr.Num(speed)))

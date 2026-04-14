@@ -7,6 +7,14 @@ import clove.dsl.given
 
   val noGravity = handler("Gravity" -> 0.0)
 
+  val lowGravity = handler("Gravity" -> 2.0)
+
+  val waterDrag = handler("Move" -> 0.3)
+
+  val waterRegion = handler("Gravity" -> 2.0, "Move" -> 0.3)
+
+  val highJump = handler("Jump" -> 10.0)
+
   val player = entity("player")
     .onSpawn {
       setState("x", 100.0)
@@ -16,7 +24,7 @@ import clove.dsl.given
       perform(Effect.Camera())
       
       when(keyDown("up"))(
-        handleWith(noGravity)
+        handleWith(highJump)
       )
       perform(Effect.Gravity())
       when(keyDown("right"))(move(5.0, 0.0))
@@ -35,10 +43,10 @@ import clove.dsl.given
       when(didCollide)(despawn())
     }
 
-  val beamGravity = gravityHandler(2.0)
 
   val setup = world {
-    region(200, 0, 300, 600, (0.0, 0.5, 1.0))(beamGravity)
+    region(200, 0, 300, 600, (0.0, 0.5, 1.0))(waterRegion)
+    // region(200, 0, 300, 600, (0.0, 0.5, 1.0))(lowGravity, waterDrag)
     spawn(player)
     spawn(item)
   }

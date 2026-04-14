@@ -11,6 +11,7 @@ enum Expr:
 
 object Expr:
   given Conversion[Double, Expr] = Expr.Num(_)
+  given Conversion[Int, Expr] = i => Expr.Num(i.toDouble)
   given Conversion[String, Expr] = Expr.Str(_)
   given Conversion[Boolean, Expr] = Expr.Bool(_)
   given Conversion[(String, Double), (String, Expr)] = (k, v) => (k, Expr.Num(v))
