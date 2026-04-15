@@ -5,6 +5,9 @@ import clove.dsl.given
 
 @main def run(): Unit =
 
+  val physics = handler("Gravity" -> 9.8, "Jump" -> 5.0, "Move" -> 1.0)
+
+
   val noGravity = handler("Gravity" -> 0.0)
 
   val lowGravity = handler("Gravity" -> 2.0)
@@ -50,6 +53,8 @@ import clove.dsl.given
     // region(200, 0, 300, 600, (0.0, 0.5, 1.0))(lowGravity, waterDrag)
     spawn(player)
     spawn(item)
+
+    handle(physics)
   }
 
   val outputPath = os.pwd / "output" / "main.lua"

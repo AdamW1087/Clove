@@ -90,3 +90,7 @@ def handleWith(handler: Handler)(body: ScriptBuilder ?=> Unit)(using b: ScriptBu
 def propagate(expr: Expr): Expr = Expr.Propagate(expr)
 
 def propagate(v: Double): Expr = Expr.Propagate(Expr.Num(v))
+
+// TODO: merge handle with handeWith dependant on where it is
+def handle(handlers: Handler*)(using b: WorldBuilder): Unit =
+  b.addHandler(handlers.toList)

@@ -36,6 +36,12 @@ object LoveRuntime:
          |${LuaEmitter.emitSpawnScript(e.name, e.spawnScript)}""".stripMargin
     }.mkString("\n")
 
+    val defaultHandlerTable = world.defaultHandlers.map { h =>
+      h.handles.map { (k, v) =>
+        s"  ${k.toLowerCase} = ${LuaEmitter.emitExpr(v)}"
+      }.mkString(",\n")
+    }.mkString(",\n")
+
     val resolveFunction =
       s"""local function resolve(task, entityRegions, effectName)
          |  local key = effectName:lower()
@@ -54,6 +60,9 @@ object LoveRuntime:
          |  if region and region[key] ~= nil then
          |    return (accumulated or 1.0) * region[key]
          |  end
+         |  if defaultHandlers[key] ~= nil then
+         |    return (accumulated or 1.0) * defaultHandlers[key]
+         |  end
          |  return accumulated
          |end""".stripMargin
 
@@ -66,6 +75,10 @@ local camera = {x = 0, y = 0, follow = nil, threshold = 400}
 
 local regions = {
 $regionTable
+}
+
+local defaultHandlers = {
+$defaultHandlerTable
 }
 
 local function checkCollision(a, b)
@@ -96,7 +109,7 @@ end
 $resolveFunction
 
 local function handleGravity(task, entityRegions, dt)
-  local g = resolve(task, entityRegions, "gravity") or 9.8
+  local g = resolve(task, entityRegions, "gravity")
   local e = entities[task.id]
   if e then
     e.vy = (e.vy or 0) + g * dt
@@ -190,7 +203,7 @@ function love.update(dt)
       elseif effect == "Jump" then
         local e = entities[task.id]
         if e and e.grounded then
-          e.vy = -(resolve(task, entityRegions, "jump") or 5.0)
+          e.vy = -(resolve(task, entityRegions, "jump"))
           e.grounded = false
         end
 
