@@ -86,3 +86,7 @@ def handleWith(handler: Handler)(using b: ScriptBuilder): Unit =
 
 def handleWith(handler: Handler)(body: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): Unit =
   b += HandleWith(handler, script(body))
+
+def propagate(expr: Expr): Expr = Expr.Propagate(expr)
+
+def propagate(v: Double): Expr = Expr.Propagate(Expr.Num(v))

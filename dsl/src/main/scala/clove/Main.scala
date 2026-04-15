@@ -9,9 +9,10 @@ import clove.dsl.given
 
   val lowGravity = handler("Gravity" -> 2.0)
 
-  val waterDrag = handler("Move" -> 0.3)
+  val waterDrag = handler("Move" -> propagate(0.3))
+  val slowMotion = handler("Move" -> propagate(0.1))
 
-  val waterRegion = handler("Gravity" -> 2.0, "Move" -> 0.3)
+  val fastRegion = handler("Gravity" -> 2.0, "Move" -> 20.0)
 
   val highJump = handler("Jump" -> 10.0)
 
@@ -24,11 +25,8 @@ import clove.dsl.given
     }
     .onUpdate {
       perform(Effect.Camera())
-      when(keyDown("up"))(
-        handleWith(highJump) {
-          when(keyDown("right"))(move(10.0, 0.0))
-        }
-      )
+      when(keyDown("up"))(handleWith(waterDrag))
+      when(keyDown("lshift"))(handleWith(slowMotion))
       perform(Effect.Gravity())
       when(keyDown("right"))(move(5.0, 0.0))
       when(keyDown("left"))(move(-5.0, 0.0))
@@ -48,7 +46,7 @@ import clove.dsl.given
 
 
   val setup = world {
-    region(200, 0, 300, 600, (0.0, 0.5, 1.0))(waterRegion)
+    region(200, 0, 300, 600, (0.0, 0.5, 1.0))(fastRegion)
     // region(200, 0, 300, 600, (0.0, 0.5, 1.0))(lowGravity, waterDrag)
     spawn(player)
     spawn(item)
