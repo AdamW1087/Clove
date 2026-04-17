@@ -12,10 +12,10 @@ import clove.dsl.given
 
   val lowGravity = handler("Gravity" -> 2.0)
 
-  val waterDrag = handler("Move" -> propagate(0.3))
-  val slowMotion = handler("Move" -> propagate(0.1))
+  val waterDrag = handler("Move" -> 0.3 * propagate())
+  val slowMotion = handler("Move" -> 0.3)
 
-  val fastRegion = handler("Gravity" -> 2.0, "Move" -> 20.0)
+  val fastRegion = handler("Gravity" -> 2.0, "Move" -> 0.3)
 
   val highJump = handler("Jump" -> 10.0)
 

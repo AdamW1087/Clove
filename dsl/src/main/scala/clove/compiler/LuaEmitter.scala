@@ -9,10 +9,20 @@ object LuaEmitter:
     case Expr.Str(v)                => s"\"$v\""
     case Expr.Bool(v)               => v.toString
     case Expr.Var(name)             => name
-    case Expr.BinOp(op, l, r)       => s"(${emitExpr(l)} $op ${emitExpr(r)})"
     case Expr.Not(e)                => s"not (${emitExpr(e)})"
     case Expr.KeyDown(key)          => s"love.keyboard.isDown(\"$key\")"
-    case Expr.Propagate(expr)       => s"{value = ${emitExpr(expr)}, propagate = true}"
+
+    case Expr.Propagate =>
+      s"{value = 1.0, propagate = true, op = \"*\"}"
+
+    case Expr.BinOp(op, l, Expr.Propagate) =>
+      s"{value = ${emitExpr(l)}, propagate = true, op = \"$op\"}"
+
+    case Expr.BinOp(op, Expr.Propagate, r) =>
+      s"{value = ${emitExpr(r)}, propagate = true, op = \"$op\"}"
+
+    case Expr.BinOp(op, l, r) => 
+      s"(${emitExpr(l)} $op ${emitExpr(r)})"
 
   def emitExprAsString(expr: Expr): String = expr match
     case Expr.Var(name) => s"\"$name\""
