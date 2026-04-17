@@ -16,10 +16,10 @@ object LuaEmitter:
       s"{value = 1.0, propagate = true, op = \"*\"}"
 
     case Expr.BinOp(op, l, Expr.Propagate) =>
-      s"{value = ${emitExpr(l)}, propagate = true, op = \"$op\"}"
+      s"{value = ${emitExpr(l)}, propagate = true, op = \"$op\",  leftVal = true}"
 
     case Expr.BinOp(op, Expr.Propagate, r) =>
-      s"{value = ${emitExpr(r)}, propagate = true, op = \"$op\"}"
+      s"{value = ${emitExpr(r)}, propagate = true, op = \"$op\",  leftVal = false}"
 
     case Expr.BinOp(op, l, r) => 
       s"(${emitExpr(l)} $op ${emitExpr(r)})"

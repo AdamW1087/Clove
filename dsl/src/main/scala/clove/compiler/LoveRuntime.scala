@@ -60,14 +60,19 @@ object LoveRuntime:
         |    if entry ~= nil then
         |      if type(entry) == "table" and entry.propagate then
         |        local rest = resolve(task, entityRegions, key, i - 1)
+        |
+        |        local neutral = (entry.op == "+" or entry.op == "-") and 0.0 or 1.0
+        |        local a = entry.leftVal and entry.value or (rest or neutral)
+        |        local b = entry.leftVal and (rest or neutral) or entry.value
+        |
         |        if entry.op == "*" then
-        |          return entry.value * (rest or 1.0)
+        |          return a * b
         |        elseif entry.op == "+" then
-        |          return entry.value + (rest or 0.0)
+        |          return a + b
         |        elseif entry.op == "-" then
-        |          return entry.value - (rest or 0.0)
+        |          return a - b
         |        elseif entry.op == "/" then
-        |          return entry.value / (rest or 1.0)
+        |          return a / b
         |        end
         |      else
         |        return entry
