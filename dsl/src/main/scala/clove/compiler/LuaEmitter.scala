@@ -73,6 +73,7 @@ object LuaEmitter:
     case Effect.GetState(key)    => s"coroutine.yield(\"GetState\", \"$key\")"
     case Effect.Collides(target) => s"coroutine.yield(\"Collides\", ${emitExprAsString(target)})"
     case Effect.Camera()         => s"coroutine.yield(\"Camera\")"
+    case Effect.Custom(name, _)  => s"coroutine.yield(\"$name\")"
 
   def emitScript(script: Script, indent: Int = 0): String =
     script.statements
@@ -98,3 +99,30 @@ object LuaEmitter:
         s"  entities[\"$entityId\"][\"$key\"] = ${emitExpr(value)}"
       case _ => ""
     }.filter(_.nonEmpty).mkString("\n")
+
+  // Below are for custom effects
+  def emitEffectImpl(effect: Effect.Custom): String =
+    s"""function(task_id, resolved, dt)
+      |${emitDirectScript(effect.impl(Expr.Var("resolved"), Expr.Var("dt")), indent = 1)}
+      |end""".stripMargin
+
+  def emitDirectScript(script: Script, indent: Int = 0): String =
+    script.statements
+      .map(emitDirectStatement(_, indent))
+      .filter(_.nonEmpty)
+      .mkString("\n")
+
+  def emitDirectStatement(stmt: Statement, indent: Int): String =
+    val pad = "  " * indent
+    stmt match
+      case Bind(varName, Effect.GetState(key)) =>
+        s"${pad}local $varName = clove_getState(task_id, \"$key\")"
+      case Perform(Effect.SetState(key, v)) =>
+        s"${pad}clove_setState(task_id, \"$key\", ${emitExpr(v)})"
+      case Bind(_, Effect.SetState(key, v)) =>
+        s"${pad}clove_setState(task_id, \"$key\", ${emitExpr(v)})"
+      case If(cond, thenBranch) =>
+        s"""${pad}if ${emitExpr(cond)} then
+          |${emitDirectScript(thenBranch, indent + 1)}
+          |${pad}end""".stripMargin
+      case _ => s"${pad}-- unsupported in direct mode"

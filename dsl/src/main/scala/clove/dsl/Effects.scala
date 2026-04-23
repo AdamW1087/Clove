@@ -92,3 +92,9 @@ def propagate(): Expr = Expr.Propagate
 // TODO: merge handle with handeWith dependant on where it is
 def handle(handlers: Handler*)(using b: WorldBuilder): Unit =
   b.addHandler(handlers.toList)
+
+def customEffect(name: String)(impl: (Expr, Expr) => Script): Effect.Custom =
+  Effect.Custom(name, impl)
+
+def register(effect: Effect.Custom)(using b: WorldBuilder): Unit =
+  b.addCustomEffect(effect)

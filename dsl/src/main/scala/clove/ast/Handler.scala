@@ -1,6 +1,6 @@
 package clove.ast
 
- // TODO -transformation logic (custom handlers)
+ // TODO : extend handler capabilites
 case class Handler(
   name: Option[String] = None,
   handles: Map[String, Expr]

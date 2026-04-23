@@ -42,6 +42,22 @@ object LoveRuntime:
       }.mkString(",\n")
     }.mkString(",\n")
 
+
+    val helperFunctions =
+      s"""local function clove_getState(entityId, key)
+        |  return entities[entityId] and entities[entityId][key]
+        |end
+        |
+        |local function clove_setState(entityId, key, value)
+        |  if entities[entityId] then
+        |    entities[entityId][key] = value
+        |  end
+        |end""".stripMargin
+
+    val effectImpls = world.customEffects.map { e =>
+      s"""  ${e.name.toLowerCase} = ${LuaEmitter.emitEffectImpl(e)}"""
+    }.mkString(",\n")
+
     val resolveFunction =
       s"""local function resolve(task, entityRegions, key, i)
         |  local taskRegions = entityRegions[task.id] or {}
@@ -94,12 +110,12 @@ local tasks = {}
 local GROUND = $groundLevel
 local camera = {x = 0, y = 0, follow = nil, threshold = 400}
 
-local regions = {
-$regionTable
-}
-
 local defaultHandlers = {
 $defaultHandlerTable
+}
+
+local regions = {
+$regionTable
 }
 
 local function checkCollision(a, b)
@@ -172,6 +188,14 @@ local function handleCollides(task, targetID)
   return false
 end
 
+$helperFunctions
+
+
+local effect_impls = {
+$effectImpls
+}
+
+
 $coroutines
 
 function love.load()
@@ -229,6 +253,13 @@ function love.update(dt)
           e.grounded = false
         end
 
+      else
+        local impl = effect_impls[effect:lower()]
+        if impl then
+          local resolved = resolve(task, entityRegions, effect:lower())
+          impl(task.id, resolved, dt)
+        end
+
       end
 
       ok, effect, a, b = coroutine.resume(task.co, response)
@@ -265,6 +296,12 @@ function love.draw()
       love.graphics.rectangle("fill", e.x - camera.x, e.y - camera.y, e.width, e.height)
     end
   end
+
+local player = entities["player"]
+if player then
+  love.graphics.setColor(1, 1, 1, 1)
+  love.graphics.print("Air: " .. player.air, 10, 10)
+end
 end""".stripMargin
 
   def writeToFile(world: World, path: os.Path): Unit =
