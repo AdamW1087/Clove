@@ -96,5 +96,5 @@ def handle(handlers: Handler*)(using b: WorldBuilder): Unit =
 def customEffect(name: String)(impl: (Expr, Expr) => Script): Effect.Custom =
   Effect.Custom(name, impl)
 
-def register(effect: Effect.Custom)(using b: WorldBuilder): Unit =
-  b.addCustomEffect(effect)
+def register(effects: Effect.Custom*)(using b: WorldBuilder): Unit =
+  b.addCustomEffects(effects.toList)

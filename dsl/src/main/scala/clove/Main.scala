@@ -12,14 +12,29 @@ import clove.dsl.given
     }
   }
 
-  val physics = handler("Gravity" -> 9.8, "Jump" -> 5.0, "Move" -> 1.0, "Drown" -> 1.0)
+  val Freeze = customEffect("Freeze") { (value, dt) =>
+    script {
+      setState("air", getState("air") - value * dt)
+    }
+  }
+
+  val tset = customEffect("Drown") { (value, dt) =>
+    script {
+      setState("air", getState("air") - value * dt)
+    }
+  }
+
+  val physics = handler("Gravity" -> 9.8, "Jump" -> 5.0, "Move" -> 1.0, 
+  "Drown" -> 1.0,
+  "Freeze" -> 0.0
+  )
 
   val noGravity = handler("Gravity" -> 0.0)
 
   val lowGravity = handler("Gravity" -> 2.0)
 
   val waterDrag = handler("Move" -> 0.3 * propagate())
-  val slowMotion = handler("Move" -> 0.3)
+  val slowMotion = handler("move" -> 0.3)
 
   val waterRegion = handler("Gravity" -> 2.0, "Move" -> 0.3, "Drown" -> 10.0)
 
@@ -68,7 +83,7 @@ import clove.dsl.given
     spawn(item)
 
     handle(physics)
-    register(Drown)
+    register(Drown, Freeze)
   }
 
   val outputPath = os.pwd / "output" / "main.lua"
