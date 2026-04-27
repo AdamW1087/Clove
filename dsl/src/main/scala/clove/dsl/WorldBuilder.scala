@@ -66,12 +66,14 @@ def validate(builder: WorldBuilder): Unit =
   // Every performed custom effect is registered
   def collectCustomPerforms(script: Script): List[String] =
     script.statements.flatMap {
-      case Perform(Effect.Custom(name, _)) => List(name.toLowerCase)
-      case Bind(_, Effect.Custom(name, _)) => List(name.toLowerCase)
-      case If(_, thenBranch)               => collectCustomPerforms(thenBranch)
-      case Loop(body)                      => collectCustomPerforms(body)
-      case HandleWith(_, body)             => collectCustomPerforms(body)
-      case _                               => Nil
+      case Perform(Effect.Custom(name, _))   => List(name.toLowerCase)
+      case Bind(_, Effect.Custom(name, _))   => List(name.toLowerCase)
+      case If(_, thenBranch)                 => collectCustomPerforms(thenBranch)
+      case Loop(body)                        => collectCustomPerforms(body)
+      case HandleWith(_, body)               => collectCustomPerforms(body)
+      case IfElse(_, thenBranch, elseBranch) =>
+        collectCustomPerforms(thenBranch) ++ collectCustomPerforms(elseBranch)
+      case _                                 => Nil
     }
 
   val performedEffects = builder.entities
@@ -85,10 +87,11 @@ def validate(builder: WorldBuilder): Unit =
   // All handler keys across default handlers, regions, and entity scripts match a known effect
   def collectHandlers(script: Script): List[Handler] =
     script.statements.flatMap {
-      case HandleWith(h, body) => h :: collectHandlers(body)
-      case If(_, thenBranch)   => collectHandlers(thenBranch)
-      case Loop(body)          => collectHandlers(body)
-      case _                   => Nil
+      case HandleWith(h, body)               => h :: collectHandlers(body)
+      case If(_, thenBranch)                 => collectHandlers(thenBranch)
+      case IfElse(_, thenBranch, elseBranch) => collectHandlers(thenBranch) ++ collectHandlers(elseBranch)
+      case Loop(body)                        => collectHandlers(body)
+      case _                                 => Nil
     }
 
   val allHandlerKeys = (

@@ -35,6 +35,9 @@ def showState(key: String)(using b: ScriptBuilder): Unit =
 def when(cond: Expr)(body: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): Unit =
   b += If(cond, script(body))
 
+def whenElse(cond: Expr)(thenBody: ScriptBuilder ?=> Unit)(elseBody: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): Unit =
+  b += IfElse(cond, script(thenBody), script(elseBody))
+
 def loop(body: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): Unit =
   b += Loop(script(body))
 

@@ -42,6 +42,13 @@ object LuaEmitter:
            |${emitScript(thenBranch, indent + 1)}
            |${pad}end""".stripMargin
 
+      case IfElse(cond, thenBranch, elseBranch) =>
+        s"""${pad}if ${emitExpr(cond)} then
+          |${emitScript(thenBranch, indent + 1)}
+          |${pad}else
+          |${emitScript(elseBranch, indent + 1)}
+          |${pad}end""".stripMargin
+
       case Loop(body) => // TODO
         s"""${pad}while true do
            |${emitScript(body, indent + 1)}
