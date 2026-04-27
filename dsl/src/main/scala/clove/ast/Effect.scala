@@ -9,6 +9,7 @@ enum Effect:
   case Draw()
   case SetState(key: String, value: Expr)
   case GetState(key: String)
+  case ShowState(key: String)
   case Collides(target: Expr)
   case Camera()
   case Custom(name: String, impl: (Expr, Expr) => Script = (_, _) => Script(List.empty))

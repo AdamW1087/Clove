@@ -29,6 +29,9 @@ def setState(key: String, value: Expr)(using b: ScriptBuilder): Expr =
 def getState(key: String)(using b: ScriptBuilder): Expr =
   perform(Effect.GetState(key))
 
+def showState(key: String)(using b: ScriptBuilder): Unit =
+  b += Perform(Effect.ShowState(key))
+
 def when(cond: Expr)(body: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): Unit =
   b += If(cond, script(body))
 

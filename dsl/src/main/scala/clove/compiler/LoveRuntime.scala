@@ -118,6 +118,8 @@ local regions = {
 $regionTable
 }
 
+local uiDrawList = {}
+
 local function checkCollision(a, b)
   if not a or not b then return false end
   return a.x < b.x + b.width and
@@ -205,6 +207,7 @@ end
 
 function love.update(dt)
   local entityRegions = {}
+  uiDrawList = {}
   for id, e in pairs(entities) do
     entityRegions[id] = getCurrentRegions(e)
   end
@@ -253,6 +256,12 @@ function love.update(dt)
           e.grounded = false
         end
 
+      elseif effect == "ShowState" then
+        local e = entities[task.id]
+        if e and e[a] ~= nil then
+          table.insert(uiDrawList, {label = a, value = e[a]})
+        end
+
       else
         local impl = effect_impls[effect:lower()]
         if impl then
@@ -291,17 +300,18 @@ function love.draw()
     love.graphics.rectangle("fill", region.x - camera.x, region.y - camera.y, region.w, region.h)
     love.graphics.setColor(1.0, 1.0, 1.0, 1.0)
   end
+
   for name, e in pairs(entities) do
     if e then
       love.graphics.rectangle("fill", e.x - camera.x, e.y - camera.y, e.width, e.height)
     end
   end
 
-local player = entities["player"]
-if player then
   love.graphics.setColor(1, 1, 1, 1)
-  love.graphics.print("Air: " .. player.air, 10, 10)
-end
+  for i, item in ipairs(uiDrawList) do
+    love.graphics.print(item.label .. ": " .. tostring(item.value), 10, 10 + (i - 1) * 20)
+  end
+
 end""".stripMargin
 
   def writeToFile(world: World, path: os.Path): Unit =

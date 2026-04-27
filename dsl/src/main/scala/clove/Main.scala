@@ -58,8 +58,10 @@ import clove.dsl.given
       setState("x", 100.0)
       setState("y", 0.0)
       setState("air", 100.0)
+      setState("health", 50.0)
     }
     .onUpdate {
+
       perform(Effect.Camera())
       when(keyDown("up"))(handleWith(waterDrag))
       when(keyDown("lshift"))(handleWith(slowMotion))
@@ -68,9 +70,12 @@ import clove.dsl.given
       when(keyDown("left"))(move(-5.0, 0.0))
       when(keyDown("space"))(perform(Effect.Jump()))
 
-      when(getState("x") >= 200.0 && getState("x") <= 500.0)(
+      showState("health")
+      when(getState("x") >= 200.0 && getState("x") <= 500.0) {
+        showState("air")
         perform(Drown)
-      )
+      }
+
       val didCollide = collides(item)
       when(didCollide)(setState("isUnderwater", false))
     }
