@@ -44,6 +44,9 @@ def loop(body: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): Unit =
 def keyDown(key: String): Expr =
   Expr.KeyDown(key)
 
+def query(name: String)(using b: ScriptBuilder): Expr =
+  perform(Effect.Query(name))
+
 def collides(target: Expr)(using b: ScriptBuilder): Expr =
   perform(Effect.Collides(target))
 

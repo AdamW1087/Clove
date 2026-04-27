@@ -261,14 +261,15 @@ function love.update(dt)
         if e and e[a] ~= nil then
           table.insert(uiDrawList, {label = a, value = e[a]})
         end
-
       else
-        local impl = effect_impls[effect:lower()]
+        local effect_key = effect:lower()
+        local impl = effect_impls[effect_key]
         if impl then
-          local resolved = resolve(task, entityRegions, effect:lower())
+          local resolved = resolve(task, entityRegions, effect_key)
           impl(task.id, resolved, dt)
+        else
+          response = resolve(task, entityRegions, effect_key)
         end
-
       end
 
       ok, effect, a, b = coroutine.resume(task.co, response)

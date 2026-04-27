@@ -6,6 +6,7 @@ import clove.dsl.given
 @main def run(): Unit =
 
 
+  // todo: maybe fix with max? then air can slowly rebuild
   val Drown = customEffect("Drown") { (value, dt) =>
     script {
       setState("air", getState("air") - value * dt)
@@ -18,15 +19,10 @@ import clove.dsl.given
     }
   }
 
-  val tset = customEffect("Drown") { (value, dt) =>
-    script {
-      setState("air", getState("air") - value * dt)
-    }
-  }
-
   val physics = handler("Gravity" -> 9.8, "Jump" -> 5.0, "Move" -> 1.0, 
   "Drown" -> 1.0,
-  "Freeze" -> 0.0
+  "Freeze" -> 0.0,
+  "isUnderwater" -> false
   )
 
   val noGravity = handler("Gravity" -> 0.0)
@@ -36,7 +32,7 @@ import clove.dsl.given
   val waterDrag = handler("Move" -> 0.3 * propagate())
   val slowMotion = handler("move" -> 0.3)
 
-  val waterRegion = handler("Gravity" -> 2.0, "Move" -> 0.3, "Drown" -> 10.0)
+  val waterRegion = handler("Gravity" -> 2.0, "Move" -> 0.3, "Drown" -> 10.0, "isUnderwater" -> true)
 
   val highJump = handler("Jump" -> 10.0)
 
@@ -62,8 +58,6 @@ import clove.dsl.given
     }
     .onUpdate {
 
-      showState("air")
-
       perform(Effect.Camera())
 
       when(keyDown("up")) {
@@ -78,15 +72,12 @@ import clove.dsl.given
       when(keyDown("space"))(perform(Effect.Jump()))
 
       showState("health")
-      whenElse(getState("x") >= 200.0 && getState("x") <= 500.0) {
-        // showState("air")
+      whenElse(query("isUnderwater")) {
         perform(Drown)
+        showState("air")
       } {
         setState("air", 100.0)
       }
-
-      val didCollide = collides(item)
-      when(didCollide)(setState("isUnderwater", false))
     }
 
 

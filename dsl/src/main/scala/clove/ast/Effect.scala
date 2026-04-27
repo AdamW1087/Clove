@@ -13,3 +13,4 @@ enum Effect:
   case Collides(target: Expr)
   case Camera()
   case Custom(name: String, impl: (Expr, Expr) => Script = (_, _) => Script(List.empty))
+  case Query(name: String)

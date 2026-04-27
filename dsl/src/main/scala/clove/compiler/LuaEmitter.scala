@@ -81,6 +81,7 @@ object LuaEmitter:
     case Effect.Collides(target) => s"coroutine.yield(\"Collides\", ${emitExprAsString(target)})"
     case Effect.Camera()         => s"coroutine.yield(\"Camera\")"
     case Effect.Custom(name, _)  => s"coroutine.yield(\"$name\")"
+    case Effect.Query(name)      => s"coroutine.yield(\"$name\")"
     case Effect.ShowState(key)   => s"coroutine.yield(\"ShowState\", \"$key\")"
 
   def emitScript(script: Script, indent: Int = 0): String =

@@ -44,10 +44,36 @@ def validate(builder: WorldBuilder): Unit =
   require(invalidRegions.isEmpty,
     s"Regions must have positive dimensions")
 
+
+  // Checks if all queries match a value in the default handler
+  def collectQueryNames(script: Script): List[String] =
+    script.statements.flatMap {
+      case Perform(Effect.Query(name))       => List(name.toLowerCase)
+      case Bind(_, Effect.Query(name))       => List(name.toLowerCase)
+      case If(_, thenBranch)                 => collectQueryNames(thenBranch)
+      case IfElse(_, thenBranch, elseBranch) => collectQueryNames(thenBranch) ++ collectQueryNames(elseBranch)
+      case Loop(body)                        => collectQueryNames(body)
+      case HandleWith(_, body)               => collectQueryNames(body)
+      case _                                 => Nil
+    }
+
+  val queryNames = builder.entities
+    .flatMap(e => collectQueryNames(e.updateScript) ++ collectQueryNames(e.spawnScript))
+    .toSet
+
+  // Include query names in known keys so handler validator doesn't reject them
+  val defaultHandlerKeys = builder.defaultHandlers.flatMap(_.handles.keys).map(_.toLowerCase).toSet
+
+  // Query effects must have a default handler value
+  val missingQueryDefaults = queryNames.filterNot(defaultHandlerKeys.contains)
+  require(missingQueryDefaults.isEmpty,
+    s"Query effects missing default handler values: ${missingQueryDefaults.mkString(", ")}")
+
+
   // Custom effects and handlers
   val registeredNames = builder.customEffects.map(_.name.toLowerCase).toSet
   val builtInKeys = Set("move", "jump", "gravity", "spawn", "despawn", "draw", "setstate", "getstate", "collides", "camera")
-  val knownKeys = registeredNames ++ builtInKeys
+  val knownKeys = registeredNames ++ builtInKeys ++ queryNames
 
   // No duplicate custom effect names
   val effectNames = builder.customEffects.map(_.name.toLowerCase)
@@ -57,7 +83,6 @@ def validate(builder: WorldBuilder): Unit =
 
 
   // Every custom effect has a default handler value
-  val defaultHandlerKeys = builder.defaultHandlers.flatMap(_.handles.keys).map(_.toLowerCase).toSet
   val missingDefaults = registeredNames.filterNot(defaultHandlerKeys.contains)
   require(missingDefaults.isEmpty,
     s"Custom effects missing default handler values: ${missingDefaults.mkString(", ")}")
@@ -67,7 +92,9 @@ def validate(builder: WorldBuilder): Unit =
   def collectCustomPerforms(script: Script): List[String] =
     script.statements.flatMap {
       case Perform(Effect.Custom(name, _))   => List(name.toLowerCase)
+      // case Perform(Effect.Query(name))       => List(name.toLowerCase)
       case Bind(_, Effect.Custom(name, _))   => List(name.toLowerCase)
+      // case Bind(_, Effect.Query(name))       => List(name.toLowerCase)
       case If(_, thenBranch)                 => collectCustomPerforms(thenBranch)
       case Loop(body)                        => collectCustomPerforms(body)
       case HandleWith(_, body)               => collectCustomPerforms(body)
@@ -103,6 +130,7 @@ def validate(builder: WorldBuilder): Unit =
   val invalidKeys = allHandlerKeys.filterNot(knownKeys.contains)
   require(invalidKeys.isEmpty,
     s"Handler keys don't match any known effect: ${invalidKeys.mkString(", ")}")
+
 
 def world(body: WorldBuilder ?=> Unit): World =
   val builder = WorldBuilder()
