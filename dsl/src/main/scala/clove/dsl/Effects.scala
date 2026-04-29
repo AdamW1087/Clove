@@ -47,6 +47,12 @@ def keyDown(key: String): Expr =
 def query(name: String)(using b: ScriptBuilder): Expr =
   perform(Effect.Query(name))
 
+def setSprite(path: String)(using b: ScriptBuilder): Unit =
+  b += Perform(Effect.SetSprite(path))
+
+def setSize(width: Double, height: Double)(using b: ScriptBuilder): Unit =
+  b += Perform(Effect.SetSize(width, height))
+
 def collides(target: Expr)(using b: ScriptBuilder): Expr =
   perform(Effect.Collides(target))
 

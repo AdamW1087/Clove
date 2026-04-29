@@ -83,6 +83,9 @@ object LuaEmitter:
     case Effect.Custom(name, _)  => s"coroutine.yield(\"$name\")"
     case Effect.Query(name)      => s"coroutine.yield(\"$name\")"
     case Effect.ShowState(key)   => s"coroutine.yield(\"ShowState\", \"$key\")"
+    // TODO: setSize working in update script
+    case Effect.SetSprite(path)  => ""
+    case Effect.SetSize(w, h) => ""
 
   def emitScript(script: Script, indent: Int = 0): String =
     script.statements
@@ -106,6 +109,11 @@ object LuaEmitter:
         s"  entities[\"$entityId\"][\"$key\"] = ${emitExpr(value)}"
       case Perform(Effect.SetState(key, value)) =>
         s"  entities[\"$entityId\"][\"$key\"] = ${emitExpr(value)}"
+      case Perform(Effect.SetSprite(path)) =>
+        s"  entities[\"$entityId\"][\"spritePath\"] = \"$path\""
+      case Perform(Effect.SetSize(w, h)) =>
+        s"""  entities["$entityId"]["width"] = ${emitExpr(w)}
+          |  entities["$entityId"]["height"] = ${emitExpr(h)}""".stripMargin
       case _ => ""
     }.filter(_.nonEmpty).mkString("\n")
 

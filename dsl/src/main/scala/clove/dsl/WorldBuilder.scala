@@ -3,6 +3,19 @@ package clove.dsl
 import clove.ast.*
 import scala.collection.mutable.ListBuffer
 
+
+/* 
+
+TODO: extend world building capabilities for 
+
+platform(x, y, w, h) solid, can stand on
+background(x, y, w, h, color) visual
+trigger(x, y, w, h)(onEnter, onExit) small visual effcts
+region(x, y, w, h)(handler)    current
+
+*/
+
+
 case class World(
   setup: Script, 
   regions: List[Region], 
@@ -37,6 +50,33 @@ def validate(builder: WorldBuilder): Unit =
   val duplicateEntities = entityNames.groupBy(identity).filter(_._2.size > 1).keys
   require(duplicateEntities.isEmpty,
     s"Duplicate entity names: ${duplicateEntities.mkString(", ")}")
+
+  // Check sprite paths exist
+  def collectSpritePaths(script: Script): List[String] =
+    script.statements.flatMap {
+      case Perform(Effect.SetSprite(path)) => List(path)
+      case If(_, thenBranch)               => collectSpritePaths(thenBranch)
+      case IfElse(_, thenBranch, elseBranch) => collectSpritePaths(thenBranch) ++ collectSpritePaths(elseBranch)
+      case Loop(body)                      => collectSpritePaths(body)
+      case HandleWith(_, body)             => collectSpritePaths(body)
+      case _                               => Nil
+    }
+
+  val spritePathsSpawn = builder.entities
+    .flatMap(e => collectSpritePaths(e.spawnScript))
+
+  val spritePathsUpdate = builder.entities
+    .flatMap(e => collectSpritePaths(e.updateScript))
+
+  require(spritePathsUpdate.isEmpty,
+    s"Sprite files should be set in the spawn script")
+
+  val missingSprites = spritePathsSpawn.filterNot { path =>
+    os.exists(os.pwd / "src" / "main" / "resources" / os.RelPath(path))
+  }
+
+  require(missingSprites.isEmpty,
+    s"Sprite files not found: ${missingSprites.mkString(", ")}")
 
 
   // Regions have valid dimensions

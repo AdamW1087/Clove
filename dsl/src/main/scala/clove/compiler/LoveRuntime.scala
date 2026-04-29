@@ -203,6 +203,13 @@ $coroutines
 function love.load()
 $spawnSetup
 $taskSetup
+
+  for name, e in pairs(entities) do
+    if e.spritePath then
+      e.sprite = love.graphics.newImage(e.spritePath)
+    end
+  end
+
 end
 
 function love.update(dt)
@@ -304,7 +311,14 @@ function love.draw()
 
   for name, e in pairs(entities) do
     if e then
-      love.graphics.rectangle("fill", e.x - camera.x, e.y - camera.y, e.width, e.height)
+      if e.sprite then
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.draw(e.sprite, e.x - camera.x, e.y - camera.y, 0,
+          e.width / e.sprite:getWidth(),
+          e.height / e.sprite:getHeight())
+      else
+        love.graphics.rectangle("fill", e.x - camera.x, e.y - camera.y, e.width, e.height)
+      end
     end
   end
 
@@ -319,3 +333,9 @@ end""".stripMargin
     val lua = wrap(world)
     os.makeDir.all(path / os.up)
     os.write.over(path, lua)
+    
+    // copy assets if they exist
+    val assetsSource = os.pwd / "src" / "main" / "resources" / "assets"
+    val assetsDest = path / os.up / "assets"
+    if os.exists(assetsSource) then
+      os.copy.over(assetsSource, assetsDest, createFolders = true)
