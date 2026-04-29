@@ -15,5 +15,6 @@ enum Effect:
   case Custom(name: String, impl: (Expr, Expr) => Script = (_, _) => Script(List.empty))
   case Query(name: String)
   // TODO: refactor what are effects and what are general operations
+  // also todo animated sprites
   case SetSprite(path: String)
   case SetSize(width: Expr, height: Expr)
