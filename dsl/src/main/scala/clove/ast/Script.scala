@@ -17,3 +17,6 @@ case class Return(value: Expr) extends Statement // TODO (early returns)
 case class HandleWith(handler: Handler, body: Script = Script(List.empty)) extends Statement
 
 case object Noop extends Statement // TODO (empty branches)t
+
+// Configurations for onSpawn (no coroutine yields)
+case class Configure(config: SpawnConfig) extends Statement

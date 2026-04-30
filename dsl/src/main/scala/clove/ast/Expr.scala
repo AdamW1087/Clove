@@ -9,6 +9,7 @@ enum Expr:
   case Not(expr: Expr)
   case KeyDown(key: String)
   case Propagate
+  case StateRead(key: String)
 
 object Expr:
   given Conversion[Double, Expr] = Expr.Num(_)

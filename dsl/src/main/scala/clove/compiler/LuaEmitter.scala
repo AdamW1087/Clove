@@ -11,6 +11,7 @@ object LuaEmitter:
     case Expr.Var(name)             => name
     case Expr.Not(e)                => s"not (${emitExpr(e)})"
     case Expr.KeyDown(key)          => s"love.keyboard.isDown(\"$key\")"
+    case Expr.StateRead(key)        => s"-- stateRead(\"$key\") used outside animRule condition"
 
     case Expr.Propagate =>
       s"{value = 1.0, propagate = true, op = \"*\"}"
@@ -21,8 +22,20 @@ object LuaEmitter:
     case Expr.BinOp(op, Expr.Propagate, r) =>
       s"{value = ${emitExpr(r)}, propagate = true, op = \"$op\",  leftVal = false}"
 
-    case Expr.BinOp(op, l, r) => 
+    case Expr.BinOp(op, l, r) =>
       s"(${emitExpr(l)} $op ${emitExpr(r)})"
+
+  // emits expressions in conditions of animation rules (todo merge with emitExpr)
+  def emitCondExpr(expr: Expr): String = expr match
+    case Expr.StateRead(key)   => s"e[\"$key\"]"
+    case Expr.Num(v)           => v.toString
+    case Expr.Str(v)           => s"\"$v\""
+    case Expr.Bool(v)          => v.toString
+    case Expr.Var(name)        => name
+    case Expr.Not(e)           => s"not (${emitCondExpr(e)})"
+    case Expr.KeyDown(key)     => s"love.keyboard.isDown(\"$key\")"
+    case Expr.BinOp(op, l, r)  => s"(${emitCondExpr(l)} $op ${emitCondExpr(r)})"
+    case Expr.Propagate        => "" // shouldnt be a propagate here
 
   def emitExprAsString(expr: Expr): String = expr match
     case Expr.Var(name) => s"\"$name\""
@@ -36,6 +49,9 @@ object LuaEmitter:
 
       case Perform(effect) =>
         s"${pad}${emitYield(effect)}"
+
+      case Configure(_) =>
+        "" // spawn-only, never emitted in update scripts
 
       case If(cond, thenBranch) =>
         s"""${pad}if ${emitExpr(cond)} then
@@ -83,9 +99,7 @@ object LuaEmitter:
     case Effect.Custom(name, _)  => s"coroutine.yield(\"$name\")"
     case Effect.Query(name)      => s"coroutine.yield(\"$name\")"
     case Effect.ShowState(key)   => s"coroutine.yield(\"ShowState\", \"$key\")"
-    // TODO: setSize working in update script
-    case Effect.SetSprite(path)  => ""
-    case Effect.SetSize(w, h) => ""
+    case Effect.SetSize(w, h)    => s"coroutine.yield(\"SetSize\", ${emitExpr(w)}, ${emitExpr(h)})"
 
   def emitScript(script: Script, indent: Int = 0): String =
     script.statements
@@ -105,19 +119,45 @@ object LuaEmitter:
 
   def emitSpawnScript(entityId: String, script: Script): String =
     script.statements.map {
+      // TODO: clean up binds at spawn time
       case Bind(_, Effect.SetState(key, value)) =>
         s"  entities[\"$entityId\"][\"$key\"] = ${emitExpr(value)}"
       case Perform(Effect.SetState(key, value)) =>
         s"  entities[\"$entityId\"][\"$key\"] = ${emitExpr(value)}"
-      case Perform(Effect.SetSprite(path)) =>
-        s"  entities[\"$entityId\"][\"spritePath\"] = \"$path\""
+
+      // SetSize in spawn — direct assignment, no coroutine needed
       case Perform(Effect.SetSize(w, h)) =>
         s"""  entities["$entityId"]["width"] = ${emitExpr(w)}
-          |  entities["$entityId"]["height"] = ${emitExpr(h)}""".stripMargin
+           |  entities["$entityId"]["height"] = ${emitExpr(h)}""".stripMargin
+      case Bind(_, Effect.SetSize(w, h)) =>
+        s"""  entities["$entityId"]["width"] = ${emitExpr(w)}
+           |  entities["$entityId"]["height"] = ${emitExpr(h)}""".stripMargin
+
+      // SpawnConfig cases via Configure
+      case Configure(SpawnConfig.SetSprite(path)) =>
+        s"  entities[\"$entityId\"][\"spritePath\"] = \"$path\""
+
+      case Configure(SpawnConfig.SetSpritesheet(path, fw, fh)) =>
+        s"""  entities["$entityId"]["sheetPath"] = "$path"
+           |  entities["$entityId"]["frameWidth"] = $fw
+           |  entities["$entityId"]["frameHeight"] = $fh
+           |  entities["$entityId"]["anims"] = {}
+           |  entities["$entityId"]["currentAnim"] = nil
+           |  entities["$entityId"]["animFrame"] = 1
+           |  entities["$entityId"]["animTimer"] = 0""".stripMargin
+
+      case Configure(SpawnConfig.AnimRule(name, frames, fps, condition)) =>
+        val luaFrames = frames.map(_ + 1).mkString(", ")
+        val condFn = condition match
+          case None       => "function(e) return true end"
+          case Some(expr) => s"function(e) return ${emitCondExpr(expr)} end"
+        s"""  table.insert(entities["$entityId"]["anims"], {name = "$name", frames = {$luaFrames}, fps = $fps, condition = $condFn})"""
+
       case _ => ""
     }.filter(_.nonEmpty).mkString("\n")
 
   // Below are for custom effects
+  // TODO: try to get other effects in this
   def emitEffectImpl(effect: Effect.Custom): String =
     s"""function(task_id, resolved, dt)
       |${emitDirectScript(effect.impl(Expr.Var("resolved"), Expr.Var("dt")), indent = 1)}

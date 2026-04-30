@@ -44,6 +44,7 @@ import clove.dsl.given
     .onSpawn {
       setState("x", 600.0)
       setState("y", 0.0)
+      setSize(50.0, 50.0)
     }
     .onUpdate {
       perform(Effect.Gravity())
@@ -53,8 +54,17 @@ import clove.dsl.given
     .onSpawn {
       setState("x", 100.0)
       setState("y", 0.0)
-      setState("air", 100.0)
-      setState("health", 50.0)
+      setState("grounded", false)
+      setSize(50.0, 80.0)
+      setState("facingRight", true)
+      setSpritesheet("assets/player_sheet.png", 64, 64)
+
+      animRule("jumpR", frames = List(5), fps = 1)(!obsState("grounded") && obsState("facingRight"))
+      animRule("walkR", frames = List(1, 2, 3, 4), fps = 8)(keyDown("right"))
+      animRule("idleR", frames = List(0), fps = 1)(obsState("facingRight"))
+      animRule("jumpL", frames = List(11), fps = 1)(!obsState("grounded") && !obsState("facingRight"))
+      animRule("walkL", frames = List(7, 8, 9, 10), fps = 8)(keyDown("left"))
+      animRule("idleL", frames = List(6), fps = 1)(!obsState("facingRight"))
     }
     .onUpdate {
 
@@ -67,9 +77,22 @@ import clove.dsl.given
 
       when(keyDown("lshift")) {handleWith(slowMotion)}
       perform(Effect.Gravity())
-      when(keyDown("right"))(move(5.0, 0.0))
-      when(keyDown("left"))(move(-5.0, 0.0))
-      when(keyDown("space"))(perform(Effect.Jump()))
+      when(keyDown("right")){
+        setState("facingRight", true)
+        move(5.0, 0.0)
+        }
+      when(keyDown("left")){
+        setState("facingRight", false)
+        move(-5.0, 0.0)
+        }
+      when(keyDown("space")) {
+        setSize(100.0, 100.0)
+        perform(Effect.Jump())
+      }
+
+      when(keyDown("k")) {
+        setSize(50.0, 80.0)
+      }
 
       showState("health")
       whenElse(query("isUnderwater")) {

@@ -29,6 +29,9 @@ def setState(key: String, value: Expr)(using b: ScriptBuilder): Expr =
 def getState(key: String)(using b: ScriptBuilder): Expr =
   perform(Effect.GetState(key))
 
+def obsState(key: String)(using b: ScriptBuilder): Expr =
+  Expr.StateRead(key)
+
 def showState(key: String)(using b: ScriptBuilder): Unit =
   b += Perform(Effect.ShowState(key))
 
@@ -47,11 +50,8 @@ def keyDown(key: String): Expr =
 def query(name: String)(using b: ScriptBuilder): Expr =
   perform(Effect.Query(name))
 
-def setSprite(path: String)(using b: ScriptBuilder): Unit =
-  b += Perform(Effect.SetSprite(path))
-
-def setSize(width: Double, height: Double)(using b: ScriptBuilder): Unit =
-  b += Perform(Effect.SetSize(width, height))
+def setSize(width: Double, height: Double)(using b: ScriptBuilder): Expr =
+  perform(Effect.SetSize(width, height))
 
 def collides(target: Expr)(using b: ScriptBuilder): Expr =
   perform(Effect.Collides(target))
@@ -113,3 +113,20 @@ def customEffect(name: String)(impl: (Expr, Expr) => Script): Effect.Custom =
 
 def register(effects: Effect.Custom*)(using b: WorldBuilder): Unit =
   b.addCustomEffects(effects.toList)
+
+
+
+def setSprite(path: String)(using b: ScriptBuilder): Unit =
+  b += Configure(SpawnConfig.SetSprite(path))
+
+def setSpritesheet(path: String, frameWidth: Int, frameHeight: Int)(using b: ScriptBuilder): Unit =
+  b += Configure(SpawnConfig.SetSpritesheet(path, frameWidth, frameHeight))
+
+ 
+
+// TODO: add a flip (e.g. animeRule(..., flipped = true)) for horizontal flipping
+def animRule(name: String, frames: List[Int], fps: Int)(using b: ScriptBuilder): Unit =
+  b += Configure(SpawnConfig.AnimRule(name, frames, fps, condition = None))
+ 
+def animRule(name: String, frames: List[Int], fps: Int)(cond: Expr)(using b: ScriptBuilder): Unit =
+  b += Configure(SpawnConfig.AnimRule(name, frames, fps, condition = Some(cond)))
