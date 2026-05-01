@@ -60,30 +60,30 @@ import clove.dsl.given
       setSpritesheet("assets/player_sheet.png", 64, 64)
 
       animRule("jumpR", frames = List(5), fps = 1)(!obsState("grounded") && obsState("facingRight"))
-      animRule("walkR", frames = List(1, 2, 3, 4), fps = 8)(keyDown("right"))
+      animRule("walkR", frames = List(1, 2, 3, 4), fps = 8)(keyDown("d"))
       animRule("idleR", frames = List(0), fps = 1)(obsState("facingRight"))
       animRule("jumpL", frames = List(11), fps = 1)(!obsState("grounded") && !obsState("facingRight"))
-      animRule("walkL", frames = List(7, 8, 9, 10), fps = 8)(keyDown("left"))
+      animRule("walkL", frames = List(7, 8, 9, 10), fps = 8)(keyDown("a"))
       animRule("idleL", frames = List(6), fps = 1)(!obsState("facingRight"))
     }
     .onUpdate {
 
       perform(Effect.Camera())
 
-      when(keyDown("up")) {
+      when(keyDown("w")) {
         handleWith(waterDrag)
       }
 
 
       when(keyDown("lshift")) {handleWith(slowMotion)}
       perform(Effect.Gravity())
-      when(keyDown("right")){
+      when(keyDown("d")){
         setState("facingRight", true)
-        move(5.0, 0.0)
+        move(500.0, 0.0)
         }
-      when(keyDown("left")){
+      when(keyDown("a")){
         setState("facingRight", false)
-        move(-5.0, 0.0)
+        move(-500.0, 0.0)
         }
       when(keyDown("space")) {
         setSize(100.0, 100.0)

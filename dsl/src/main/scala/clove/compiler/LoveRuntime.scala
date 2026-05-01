@@ -40,7 +40,6 @@ object LoveRuntime:
       }.mkString(",\n")
     }.mkString(",\n")
 
-
     val helperFunctions =
       s"""local function clove_getState(entityId, key)
         |  return entities[entityId] and entities[entityId][key]
@@ -210,10 +209,10 @@ local function handleGravity(task, entityRegions, dt)
   end
 end
 
-local function handleMove(task, entityRegions, a, b)
+local function handleMove(task, entityRegions, a, b, dt)
   local e = entities[task.id]
   if e then
-    local dx, dy = a, b
+    local dx, dy = a * dt, b * dt
     local mult = resolve(task, entityRegions, "move")
     if mult then
       dx = dx * mult
@@ -306,7 +305,7 @@ function love.update(dt)
         handleGravity(task, entityRegions, dt)
 
       elseif effect == "Move" then
-        handleMove(task, entityRegions, a, b)
+        handleMove(task, entityRegions, a, b, dt)
 
       elseif effect == "Despawn" then
         entities[task.id] = nil
