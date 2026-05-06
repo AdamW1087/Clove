@@ -9,6 +9,8 @@ enum Effect:
   case Draw()
   case SetState(key: String, value: Expr)
   case GetState(key: String)
+  case SetGlobal(key: String, value: Expr)
+  case GetGlobal(key: String)
   case ShowState(key: String)
   case Collides(target: Expr)
   case Camera()

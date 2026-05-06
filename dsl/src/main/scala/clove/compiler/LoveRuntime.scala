@@ -1,20 +1,56 @@
 package clove.compiler
 
 import clove.ast.*
-import clove.dsl.World
+import clove.dsl.{World, Region, Behaviour}
 
 object LoveRuntime:
 
   val groundLevel = 600
 
   def wrap(world: World): String =
-    val regionTable = world.regions.map { r =>
-      val overrides = r.handlers.flatMap(_.handles).map { (k, v) =>
-        s"    ${k.toLowerCase} = ${LuaEmitter.emitExpr(v)}"
-      }.mkString(",\n")
-      s"""  {x = ${r.x}, y = ${r.y}, w = ${r.w}, h = ${r.h}, r = ${r.colorR}, g = ${r.colorG}, b = ${r.colorB},
-         |$overrides
-         |  }""".stripMargin
+
+    // Region table
+    val regionTable = world.regions.zipWithIndex.map { (r, idx) =>
+      val idStr = r.id.map(id => s"\"$id\"").getOrElse(s"\"region_$idx\"")
+      val condStr = r.condition match
+        case None       => "nil"
+        case Some(expr) => s"function(globals) return ${LuaEmitter.emitCondExpr(expr)} end"
+
+      r.behaviour match
+        case Behaviour.Basic(handlers) =>
+          val overrides = handlers.flatMap(_.handles).map { (k, v) =>
+            s"${k.toLowerCase} = ${LuaEmitter.emitExpr(v)}"
+          }.mkString(", ")
+
+          val (cr, cg, cb) = r.colour.getOrElse((1.0, 1.0, 1.0))
+          s"""  {id = $idStr, x = ${r.x}, y = ${r.y}, w = ${r.w}, h = ${r.h},
+             |   type = "basic", hasColor = ${r.colour.isDefined.toString}, r = $cr, g = $cg, b = $cb,
+             |   hasHandlers = ${handlers.nonEmpty.toString}, $overrides, condition = $condStr}""".stripMargin
+
+        case Behaviour.Solid(oneWay) =>
+          val (cr, cg, cb) = r.colour.getOrElse((1.0, 1.0, 1.0))
+          s"""  {id = $idStr, x = ${r.x}, y = ${r.y}, w = ${r.w}, h = ${r.h},
+             |   type = "solid", oneWay = ${oneWay.toString},
+             |   hasColor = ${r.colour.isDefined.toString}, r = $cr, g = $cg, b = $cb,
+             |   condition = $condStr}""".stripMargin
+
+        case Behaviour.Trigger(onEnter, onExit) =>
+          val enterLua = LuaEmitter.emitTriggerScript(onEnter)
+          val exitLua  = LuaEmitter.emitTriggerScript(onExit)
+          val (cr, cg, cb) = r.colour.getOrElse((1.0, 1.0, 1.0))
+
+          s"""  {id = $idStr, x = ${r.x}, y = ${r.y}, w = ${r.w}, h = ${r.h},
+             |   type = "trigger",
+             |   hasColor = ${r.colour.isDefined.toString}, r = $cr, g = $cg, b = $cb,
+             |   onEnter = function(task_id, globals) $enterLua end,
+             |   onExit  = function(task_id, globals) $exitLua end,
+             |   condition = $condStr}""".stripMargin
+
+    }.mkString(",\n")
+
+    // Globals table
+    val globalsTable = world.initialGlobals.map { (k, v) =>
+      s"  [\"$k\"] = ${LuaEmitter.emitExpr(v)}"
     }.mkString(",\n")
 
     val coroutines = world.entities
@@ -56,6 +92,11 @@ object LoveRuntime:
         |    if a.name == name then return a end
         |  end
         |  return anims[#anims]
+        |end
+        |
+        |local function regionActive(region)
+        |  if region.condition == nil then return true end
+        |  return region.condition(globals)
         |end""".stripMargin
 
     val effectImpls = world.customEffects.map { e =>
@@ -85,15 +126,12 @@ object LoveRuntime:
         |        local a = entry.leftVal and entry.value or (rest or neutral)
         |        local b = entry.leftVal and (rest or neutral) or entry.value
         |
-        |        if entry.op == "*" then
-        |          return a * b
-        |        elseif entry.op == "+" then
-        |          return a + b
-        |        elseif entry.op == "-" then
-        |          return a - b
-        |        elseif entry.op == "/" then
-        |          return a / b
+        |        if entry.op == "*" then return a * b
+        |        elseif entry.op == "+" then return a + b
+        |        elseif entry.op == "-" then return a - b
+        |        elseif entry.op == "/" then return a / b
         |        end
+        |
         |      else
         |        return entry
         |      end
@@ -101,14 +139,12 @@ object LoveRuntime:
         |    i = i - 1
         |  end
         |
-        |  if defaultHandlers[key] ~= nil then
-        |    return defaultHandlers[key]
-        |  end
+        |  if defaultHandlers[key] ~= nil then return defaultHandlers[key] end
         |  return nil
         |end""".stripMargin
 
     val animUpdateLoop =
-      s"""  -- Animated sprite update
+      s"""-- Animated sprite update
         |  for id, e in pairs(entities) do
         |    if e.anims and #e.anims > 0 then
         |      -- Find current animation
@@ -119,12 +155,14 @@ object LoveRuntime:
         |          break
         |        end
         |      end
+        |
         |      -- Reset timer and frame if changing animation
         |      if activeName and activeName ~= e.currentAnim then
         |        e.currentAnim = activeName
         |        e.animFrame = 1
         |        e.animTimer = 0
         |      end
+        |
         |      -- Advance frame
         |      if e.currentAnim then
         |        local anim = clove_findAnim(e.anims, e.currentAnim)
@@ -141,8 +179,11 @@ object LoveRuntime:
 
 local entities = {}
 local tasks = {}
-local GROUND = $groundLevel
 local camera = {x = 0, y = 0, follow = nil, threshold = 400}
+
+local globals = {
+$globalsTable
+}
 
 local defaultHandlers = {
 $defaultHandlerTable
@@ -152,7 +193,12 @@ local regions = {
 $regionTable
 }
 
+$helperFunctions
+
+
 local uiDrawList = {}
+-- overlap[entityId][regionId] = bool, tracks previous frame overlap for triggers
+local prevOverlap = {}
 
 local function checkCollision(a, b)
   if not a or not b then return false end
@@ -162,18 +208,18 @@ local function checkCollision(a, b)
          a.y + a.height > b.y
 end
 
-local function insideRegion(e, x, y, w, h)
+local function insideRegion(e, r)
   if not e then return false end
-  return e.x < x + w and
-         e.x + e.width > x and
-         e.y < y + h and
-         e.y + e.height > y
+  return e.x < r.x + r.w and
+         e.x + e.width > r.x and
+         e.y < r.y + r.h and
+         e.y + e.height > r.y
 end
 
-local function getCurrentRegions(e)
+local function getEffectScopeRegions(e)
   local result = {}
   for _, region in ipairs(regions) do
-    if insideRegion(e, region.x, region.y, region.w, region.h) then
+    if region.type == "basic" and region.hasHandlers and regionActive(region) and insideRegion(e, region) then
       table.insert(result, region)
     end
   end
@@ -182,63 +228,129 @@ end
 
 $resolveFunction
 
-local function handleSetSize(task, a, b)
-  local e = entities[task.id]
-  if e then
-    e.width  = a
-    e.height = b
-  end
-end
-
 local function handleGravity(task, entityRegions, dt)
   local g = resolve(task, entityRegions, "gravity")
   local e = entities[task.id]
-  if e then
-    e.vy = (e.vy or 0) + g * dt
-    e.y = e.y + e.vy
-    if e.y + e.height >= GROUND then
-      e.y = GROUND - e.height
-      e.vy = 0
-      e.grounded = true
-    elseif e.y <= 0 then
-      e.y = 0
-      e.vy = 0
-    else
-      e.grounded = false
+  if not e or not g then return end
+
+  e.vy = (e.vy or 0) + g * dt
+  e.y  = e.y + e.vy
+
+  -- Solid region collision (vertical)
+  for _, region in ipairs(regions) do
+    if region.type == "solid" and regionActive(region) then
+      if insideRegion(e, region) then
+        -- Falling onto solid from above
+        if e.vy >= 0 and not region.oneWay then
+          e.y  = region.y - e.height
+          e.vy = 0
+          e.grounded = true
+
+        -- One way (only collide if from above)
+        elseif e.vy >= 0 and region.oneWay then
+          local prevBottom = (e.y - e.vy * dt) + e.height
+          if prevBottom <= region.y + 2 then
+            e.y  = region.y - e.height
+            e.vy = 0
+            e.grounded = true
+          end
+
+        -- Hitting ceiling
+        elseif e.vy < 0 and not region.oneWay then
+          e.y  = region.y + region.h
+          e.vy = 0
+        end
+      end
     end
+  end
+
+  -- Ground floor
+  if e.y + e.height >= $groundLevel then
+    e.y  = $groundLevel - e.height
+    e.vy = 0
+    e.grounded = true
+  elseif e.y <= 0 then
+    e.y  = 0
+    e.vy = 0
+  
+  -- Not grounded if not on a solid
+  else
+    local onSolid = false
+    for _, region in ipairs(regions) do
+      if region.type == "solid" and regionActive(region) then
+        if math.abs((e.y + e.height) - region.y) < 2 and
+           e.x + e.width > region.x and e.x < region.x + region.w then
+          onSolid = true; break
+        end
+      end
+    end
+    if not onSolid then e.grounded = false end
   end
 end
 
 local function handleMove(task, entityRegions, a, b, dt)
   local e = entities[task.id]
-  if e then
-    local dx, dy = a * dt, b * dt
-    local mult = resolve(task, entityRegions, "move")
-    if mult then
-      dx = dx * mult
-      dy = dy * mult
+  if not e then return end
+  local dx = a * dt
+  local dy = b * dt
+  local mult = resolve(task, entityRegions, "move")
+  if mult then dx = dx * mult; dy = dy * mult end
+
+  e.x = e.x + dx
+
+  -- Solid region collision (horizontal)
+  for _, region in ipairs(regions) do
+    if region.type == "solid" and not region.oneWay and regionActive(region) then
+      if insideRegion(e, region) then
+        if dx > 0 then
+          e.x = region.x - e.width
+        elseif dx < 0 then
+          e.x = region.x + region.w
+        end
+      end
     end
-    e.x = e.x + dx
-    e.y = e.y + dy
+  end
+
+  e.y = e.y + dy
+end
+
+local function handleSetSize(task, a, b)
+  local e = entities[task.id]
+  if e then 
+    e.width = a
+    e.height = b 
   end
 end
 
 local function handleCollides(task, targetID)
   local e = entities[task.id]
   local target = entities[targetID]
-  if e and target then
-    return checkCollision(e, target)
-  end
+  if e and target then return checkCollision(e, target) end
   return false
 end
 
-$helperFunctions
-
+local function handleTriggers(dt)
+  for id, e in pairs(entities) do
+    if not prevOverlap[id] then prevOverlap[id] = {} end
+    for _, region in ipairs(regions) do
+      if region.type == "trigger" and regionActive(region) then
+        local rid = region.id
+        local isInside = insideRegion(e, region)
+        local wasInside = prevOverlap[id][rid] or false
+        if isInside and not wasInside then
+          region.onEnter(id, globals)
+        elseif not isInside and wasInside then
+          region.onExit(id, globals)
+        end
+        prevOverlap[id][rid] = isInside
+      end
+    end
+  end
+end
 
 local effect_impls = {
 $effectImpls
 }
-
 
 $coroutines
 
@@ -251,6 +363,7 @@ $taskSetup
     if e.spritePath then
       e.sprite = love.graphics.newImage(e.spritePath)
     end
+
     -- Spritesheet: load image and build quad table
     if e.sheetPath then
       e.sheet = love.graphics.newImage(e.sheetPath)
@@ -264,15 +377,12 @@ $taskSetup
           -- quads are 1-indexed matching +1 offset in AnimRule emission
           local idx = row * cols + col + 1
           e.quads[idx] = love.graphics.newQuad(
-            col * e.frameWidth,
-            row * e.frameHeight,
-            e.frameWidth,
-            e.frameHeight,
-            sheetW,
-            sheetH
-          )
+            col * e.frameWidth, row * e.frameHeight,
+            e.frameWidth, e.frameHeight,
+            sheetW, sheetH)
         end
       end
+
       -- Initialise animation state if not set by spawn script
       if not e.currentAnim and e.anims and #e.anims > 0 then
         e.currentAnim = e.anims[#e.anims].name -- fallback to last rule
@@ -281,14 +391,13 @@ $taskSetup
       end
     end
   end
-
 end
 
 function love.update(dt)
   local entityRegions = {}
   uiDrawList = {}
   for id, e in pairs(entities) do
-    entityRegions[id] = getCurrentRegions(e)
+    entityRegions[id] = getEffectScopeRegions(e)
   end
 
   for _, task in ipairs(tasks) do
@@ -307,6 +416,7 @@ function love.update(dt)
       elseif effect == "Move" then
         handleMove(task, entityRegions, a, b, dt)
 
+
       elseif effect == "Despawn" then
         entities[task.id] = nil
         task.dead = true
@@ -319,18 +429,21 @@ function love.update(dt)
         handleSetSize(task, a, b)
 
       elseif effect == "SetState" then
-        if entities[task.id] then
-          entities[task.id][a] = b
-        end
+        if entities[task.id] then entities[task.id][a] = b end
 
       elseif effect == "GetState" then
-        if entities[task.id] then
-          response = entities[task.id][a]
-        end
+        if entities[task.id] then response = entities[task.id][a] end
+
+      elseif effect == "SetGlobal" then
+        globals[a] = b
+
+      elseif effect == "GetGlobal" then
+        response = globals[a]
 
       elseif effect == "Camera" then
         camera.follow = task.id
 
+      -- todo: fix grounded force (e.g. underwater)
       elseif effect == "Jump" then
         local e = entities[task.id]
         if e and e.grounded then
@@ -362,7 +475,9 @@ function love.update(dt)
     end
   end
 
-$animUpdateLoop
+  $animUpdateLoop
+
+  handleTriggers(dt)
 
   if camera.follow then
     local followed = entities[camera.follow]
@@ -371,19 +486,19 @@ $animUpdateLoop
     end
   end
 
-  -- clean up dead tasks
+  -- Cleanup
   for i = #tasks, 1, -1 do
-    if tasks[i].dead then
-      table.remove(tasks, i)
-    end
+    if tasks[i].dead then table.remove(tasks, i) end
   end
 end
 
 function love.draw()
   for _, region in ipairs(regions) do
-    love.graphics.setColor(region.r, region.g, region.b, 0.3)
-    love.graphics.rectangle("fill", region.x - camera.x, region.y - camera.y, region.w, region.h)
-    love.graphics.setColor(1.0, 1.0, 1.0, 1.0)
+    if region.hasColor and regionActive(region) then
+      love.graphics.setColor(region.r, region.g, region.b, 1)
+      love.graphics.rectangle("fill", region.x - camera.x, region.y - camera.y, region.w, region.h)
+      love.graphics.setColor(1.0, 1.0, 1.0, 1.0)
+    end
   end
 
   for name, e in pairs(entities) do
@@ -395,13 +510,13 @@ function love.draw()
         local quad = e.quads[frameIdx]
         if quad then
           love.graphics.setColor(1, 1, 1, 1)
-          local sx = e.width  / e.frameWidth
-          local sy = e.height / e.frameHeight
+
           -- Translate to draw position so scale doesnt
           -- shift frames that quad x/y offset is non-zero
           love.graphics.push()
           love.graphics.translate(e.x - camera.x, e.y - camera.y)
-          love.graphics.draw(e.sheet, quad, 0, 0, 0, sx, sy)
+          love.graphics.draw(e.sheet, quad, 0, 0, 0,
+            e.width / e.frameWidth, e.height / e.frameHeight)
           love.graphics.pop()
         end
       
@@ -409,11 +524,9 @@ function love.draw()
       elseif e.sprite then
         love.graphics.setColor(1, 1, 1, 1)
         love.graphics.draw(e.sprite, e.x - camera.x, e.y - camera.y, 0,
-          e.width / e.sprite:getWidth(),
-          e.height / e.sprite:getHeight())
-      
-      -- Default rectangle
+          e.width / e.sprite:getWidth(), e.height / e.sprite:getHeight())
       else
+        love.graphics.setColor(1.0, 1.0, 1.0, 1.0)
         love.graphics.rectangle("fill", e.x - camera.x, e.y - camera.y, e.width, e.height)
       end
     end
@@ -423,7 +536,6 @@ function love.draw()
   for i, item in ipairs(uiDrawList) do
     love.graphics.print(item.label .. ": " .. tostring(item.value), 10, 10 + (i - 1) * 20)
   end
-
 end""".stripMargin
 
   def writeToFile(world: World, path: os.Path): Unit =

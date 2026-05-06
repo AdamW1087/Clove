@@ -23,14 +23,21 @@ def despawn()(using b: ScriptBuilder): Expr =
 def draw()(using b: ScriptBuilder): Expr =
   perform(Effect.Draw())
 
-def setState(key: String, value: Expr)(using b: ScriptBuilder): Expr =
-  perform(Effect.SetState(key, value))
+def setState(key: String, value: Expr)(using b: ScriptBuilder): Unit =
+  b += Perform(Effect.SetState(key, value))
 
 def getState(key: String)(using b: ScriptBuilder): Expr =
   perform(Effect.GetState(key))
 
-def obsState(key: String)(using b: ScriptBuilder): Expr =
-  Expr.StateRead(key)
+def setGlobal(key: String, value: Expr)(using b: ScriptBuilder): Unit =
+  b += Perform(Effect.SetGlobal(key, value))
+
+def getGlobal(key: String)(using b: ScriptBuilder): Expr =
+  perform(Effect.GetGlobal(key))
+
+// Define a global var
+def global(key: String, value: Expr)(using b: WorldBuilder): Unit =
+  b.setGlobal(key, value)
 
 def showState(key: String)(using b: ScriptBuilder): Unit =
   b += Perform(Effect.ShowState(key))
@@ -55,12 +62,6 @@ def setSize(width: Double, height: Double)(using b: ScriptBuilder): Expr =
 
 def collides(target: Expr)(using b: ScriptBuilder): Expr =
   perform(Effect.Collides(target))
-
-def region(x: Double, y: Double, w: Double, h: Double,
-           color: (Double, Double, Double) = (1.0, 1.0, 1.0))
-          (handlers: Handler*)
-          (using b: WorldBuilder): Unit =
-  b.addRegion(Region(x, y, w, h, color._1, color._2, color._3, handlers.toList))
 
 
 // TODO: stack camera (sometimes pressing to swap in doesnt get registered as it is dependant on which task is ran last)
@@ -115,6 +116,56 @@ def register(effects: Effect.Custom*)(using b: WorldBuilder): Unit =
   b.addCustomEffects(effects.toList)
 
 
+// TODO: Fix overloaded defaults
+
+// def region(x: Double, y: Double, w: Double, h: Double,
+//            colour: Option[(Double, Double, Double)] = None,
+//            condition: Option[Expr] = None)
+//           (handlers: Handler*)
+//           (using b: WorldBuilder): Unit =
+//   b.addRegion(Region(None, x, y, w, h, Behaviour.Basic(colour, handlers.toList), condition))
+
+def region(id: String, x: Double, y: Double, w: Double, h: Double,
+           colour: Option[(Double, Double, Double)] = None,
+           condition: Option[Expr] = None)
+          (handlers: Handler*)
+          (using b: WorldBuilder): Unit =
+  b.addRegion(Region(Some(id), x, y, w, h, Behaviour.Basic(handlers.toList), condition, colour))
+
+// def platform(x: Double, y: Double, w: Double, h: Double,
+//              oneWay: Boolean = false,
+//              condition: Option[Expr] = None)
+//             (using b: WorldBuilder): Unit =
+//   b.addRegion(Region(None, x, y, w, h, Behaviour.Solid(oneWay), condition))
+
+def platform(id: String, x: Double, y: Double, w: Double, h: Double,
+             colour: Option[(Double, Double, Double)] = None,
+             oneWay: Boolean = false,
+             condition: Option[Expr] = None)
+            (using b: WorldBuilder): Unit =
+  b.addRegion(Region(Some(id), x, y, w, h, Behaviour.Solid(oneWay), condition, colour))
+
+
+// TODO: maybe remove?? can be mimicked from handler values but still need one shot code 
+// unless you use "hasBeenUnderwater"...
+
+/* def triggerable(x: Double, y: Double, w: Double, h: Double)
+            (onEnter: ScriptBuilder ?=> Unit = (_: ScriptBuilder) ?=> (),
+             onExit: ScriptBuilder ?=> Unit  = (_: ScriptBuilder) ?=> ())
+            (using b: WorldBuilder): Unit =
+   b.addRegion(Region(None, x, y, w, h,
+     Behaviour.Trigger(script(onEnter), script(onExit)))) */
+
+def triggerable(id: String, x: Double, y: Double, w: Double, h: Double,
+           colour: Option[(Double, Double, Double)] = None,
+           condition: Option[Expr] = None,
+           onEnter: ScriptBuilder ?=> Unit = (_: ScriptBuilder) ?=> (),
+            onExit: ScriptBuilder ?=> Unit  = (_: ScriptBuilder) ?=> ())
+           (using b: WorldBuilder): Unit =
+  b.addRegion(Region(Some(id), x, y, w, h,
+    Behaviour.Trigger(script(onEnter), script(onExit)), condition, colour))
+
+
 
 def setSprite(path: String)(using b: ScriptBuilder): Unit =
   b += Configure(SpawnConfig.SetSprite(path))
@@ -122,11 +173,14 @@ def setSprite(path: String)(using b: ScriptBuilder): Unit =
 def setSpritesheet(path: String, frameWidth: Int, frameHeight: Int)(using b: ScriptBuilder): Unit =
   b += Configure(SpawnConfig.SetSpritesheet(path, frameWidth, frameHeight))
 
- 
+
+def obsState(key: String): Expr = Expr.StateRead(key)
+
+def obsGlobal(key: String): Expr = Expr.GlobalRead(key)
 
 // TODO: add a flip (e.g. animeRule(..., flipped = true)) for horizontal flipping
 def animRule(name: String, frames: List[Int], fps: Int)(using b: ScriptBuilder): Unit =
   b += Configure(SpawnConfig.AnimRule(name, frames, fps, condition = None))
- 
+
 def animRule(name: String, frames: List[Int], fps: Int)(cond: Expr)(using b: ScriptBuilder): Unit =
   b += Configure(SpawnConfig.AnimRule(name, frames, fps, condition = Some(cond)))

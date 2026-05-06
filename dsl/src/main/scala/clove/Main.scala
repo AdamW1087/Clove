@@ -45,6 +45,7 @@ import clove.dsl.given
       setState("x", 600.0)
       setState("y", 0.0)
       setSize(50.0, 50.0)
+      setState("temp", 50.0)
     }
     .onUpdate {
       perform(Effect.Gravity())
@@ -58,6 +59,9 @@ import clove.dsl.given
       setSize(50.0, 80.0)
       setState("facingRight", true)
       setSpritesheet("assets/player_sheet.png", 64, 64)
+
+      setState("temp", 50.0)
+      setState("health", 50.0)
 
       animRule("jumpR", frames = List(5), fps = 1)(!obsState("grounded") && obsState("facingRight"))
       animRule("walkR", frames = List(1, 2, 3, 4), fps = 8)(keyDown("d"))
@@ -86,12 +90,16 @@ import clove.dsl.given
         move(-500.0, 0.0)
         }
       when(keyDown("space")) {
-        setSize(100.0, 100.0)
+        // setSize(100.0, 100.0)
         perform(Effect.Jump())
       }
 
       when(keyDown("k")) {
         setSize(50.0, 80.0)
+      }
+
+      when(getGlobal("testValue") === 100.0) {
+        showState("temp")
       }
 
       showState("health")
@@ -105,11 +113,17 @@ import clove.dsl.given
 
 
   val setup = world {
-    region(200, 0, 300, 600, (0.0, 0.5, 1.0))(waterRegion)
-    // region(200, 0, 300, 600, (0.0, 0.5, 1.0))(lowGravity, waterDrag)
+    region("test23", 200, 0, 300, 600, Some(0.0, 0.5, 1.0))(lowGravity, waterRegion)
+    
+    triggerable("test", 200, 400, 150, 100
+    , Some(0.0, 0.0, 0.0), 
+    onEnter = { setGlobal("testValue", 100.0) },
+    onExit = { setGlobal("testValue", 50.0) }
+    )
     spawn(player)
     spawn(item)
 
+    global("testValue", 50.0)
     handle(physics)
     register(Drown, Freeze)
   }

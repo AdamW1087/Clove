@@ -4,54 +4,41 @@ import clove.ast.*
 import scala.collection.mutable.ListBuffer
 
 
-/* 
-
-TODO: extend world building capabilities for 
-
-platform(x, y, w, h) solid, can stand on
-background(x, y, w, h, color) visual
-trigger(x, y, w, h)(onEnter, onExit) small visual effcts
-region(x, y, w, h)(handler)    current
-
-*/
-
-
 case class World(
   setup: Script,
   regions: List[Region],
   entities: List[Entity],
   defaultHandlers: List[Handler] = List.empty,
-  customEffects: List[Effect.Custom] = List.empty
+  customEffects: List[Effect.Custom] = List.empty,
+  initialGlobals: Map[String, Expr] = Map.empty
 )
 
 class WorldBuilder extends ScriptBuilder:
-  val regions = ListBuffer[Region]()
-  val entities = ListBuffer[Entity]()
+  val regions         = ListBuffer[Region]()
+  val entities        = ListBuffer[Entity]()
   val defaultHandlers = ListBuffer[Handler]()
-  val customEffects = ListBuffer[Effect.Custom]()
+  val customEffects   = ListBuffer[Effect.Custom]()
+  val globals         = scala.collection.mutable.Map[String, Expr]()
 
-  def addRegion(r: Region): Unit = regions += r
-  def addEntity(e: Entity): Unit = entities += e
-  def addHandler(hs: List[Handler]): Unit = defaultHandlers ++= hs
+  def addRegion(r: Region): Unit                      = regions += r
+  def addEntity(e: Entity): Unit                      = entities += e
+  def addHandler(hs: List[Handler]): Unit             = defaultHandlers ++= hs
   def addCustomEffects(es: List[Effect.Custom]): Unit = customEffects ++= es
+  def setGlobal(key: String, value: Expr): Unit       = globals(key) = value
 
 
 def validate(builder: WorldBuilder): Unit =
 
-  // World must have at least one entity
   require(builder.entities.nonEmpty, "World must have at least one entity")
-
-  // World must have default handlers
   require(builder.defaultHandlers.nonEmpty, "World must have at least one default handler")
 
-
-  // No two entities with the same name
+  // No duplicate entity names
   val entityNames = builder.entities.map(_.name)
   val duplicateEntities = entityNames.groupBy(identity).filter(_._2.size > 1).keys
   require(duplicateEntities.isEmpty,
     s"Duplicate entity names: ${duplicateEntities.mkString(", ")}")
 
-  // All entities must call setSize somewhere (spawn or update)
+  // Every entity must have setSize defined
   def hasSetSize(script: Script): Boolean =
     script.statements.exists {
       case Perform(Effect.SetSize(_, _)) => true
@@ -65,7 +52,7 @@ def validate(builder: WorldBuilder): Unit =
   require(missingSize.isEmpty,
     s"Entities missing setSize: ${missingSize.mkString(", ")}")
 
-  // Configure (SpawnConfig) must not appear in update scripts
+  // Configure must not appear in update scripts
   def collectConfigureInUpdate(script: Script): List[String] =
     script.statements.flatMap {
       case Configure(c)                          => List(c.getClass.getSimpleName)
@@ -78,9 +65,9 @@ def validate(builder: WorldBuilder): Unit =
 
   val configInUpdate = builder.entities.flatMap(e => collectConfigureInUpdate(e.updateScript))
   require(configInUpdate.isEmpty,
-    s"Spawn configuration (setSprite, setSpritesheet, animRule) must be in onSpawn, not onUpdate: ${configInUpdate.mkString(", ")}")
+    s"Spawn configuration must be in onSpawn, not onUpdate: ${configInUpdate.mkString(", ")}")
 
-  // Check sprite/spritesheet paths exist
+  // Sprite/spritesheet paths exist
   def collectSpritePaths(script: Script): List[String] =
     script.statements.flatMap {
       case Configure(SpawnConfig.SetSprite(path))            => List(path)
@@ -95,20 +82,22 @@ def validate(builder: WorldBuilder): Unit =
   val missingSprites = builder.entities
     .flatMap(e => collectSpritePaths(e.spawnScript))
     .filterNot(path => os.exists(os.pwd / "src" / "main" / "resources" / os.RelPath(path)))
-
   require(missingSprites.isEmpty,
     s"Sprite files not found: ${missingSprites.mkString(", ")}")
 
-  // AnimRule must appear after SetSpritesheet in spawn script
+  // AnimRule must appear after SetSpritesheet
   def animRuleBeforeSheet(script: Script): Boolean =
-    var sawSheet = false
-    script.statements.foreach {
-      case Configure(SpawnConfig.SetSpritesheet(_, _, _)) => sawSheet = true
-      case Configure(SpawnConfig.AnimRule(_, _, _, _)) if !sawSheet => true
-      case _ =>
+    val statements = script.statements
+    val sheetIdx = statements.indexWhere {
+      case Configure(SpawnConfig.SetSpritesheet(_, _, _)) => true
+      case _ => false
     }
-    false
-
+    val firstRuleIdx = statements.indexWhere {
+      case Configure(SpawnConfig.AnimRule(_, _, _, _)) => true
+      case _ => false
+    }
+    firstRuleIdx >= 0 && (sheetIdx < 0 || firstRuleIdx < sheetIdx)
+ 
   val animWithoutSheet = builder.entities.filter(e => animRuleBeforeSheet(e.spawnScript)).map(_.name)
   require(animWithoutSheet.isEmpty,
     s"animRule used before setSpritesheet in: ${animWithoutSheet.mkString(", ")}")
@@ -117,16 +106,61 @@ def validate(builder: WorldBuilder): Unit =
   val invalidRegions = builder.regions.filter(r => r.w <= 0 || r.h <= 0)
   require(invalidRegions.isEmpty, "Regions must have positive dimensions")
 
+  // No duplicate region ids
+  val regionIds = builder.regions.flatMap(_.id)
+  val duplicateRegions = regionIds.groupBy(identity).filter(_._2.size > 1).keys
+  require(duplicateRegions.isEmpty,
+    s"Duplicate region ids: ${duplicateRegions.mkString(", ")}")
+
+  // Trigger scripts must only use setState/getState/setGlobal/getGlobal
+  def collectIllegalTriggerEffects(script: Script): List[String] =
+    script.statements.flatMap {
+      case Perform(Effect.SetState(_, _))     => Nil
+      case Bind(_, Effect.GetState(_))        => Nil
+      case Perform(Effect.SetGlobal(_, _))    => Nil
+      case Bind(_, Effect.GetGlobal(_))       => Nil
+      case Perform(Effect.SetSize(_, _))      => Nil
+      case If(_, thenBranch)                  => collectIllegalTriggerEffects(thenBranch)
+      case IfElse(_, thenBranch, elseBranch)  => collectIllegalTriggerEffects(thenBranch) ++ collectIllegalTriggerEffects(elseBranch)
+      case Perform(e)                         => List(e.getClass.getSimpleName)
+      case Bind(_, e)                         => List(e.getClass.getSimpleName)
+      case _                                  => Nil
+    }
+
+  val illegalTriggerEffects = builder.regions.flatMap {
+    case Region(id, _, _, _, _, Behaviour.Trigger(onEnter, onExit), _, _) =>
+      val bad = collectIllegalTriggerEffects(onEnter) ++ collectIllegalTriggerEffects(onExit)
+      bad.map(e => s"${id.getOrElse("unnamed trigger")}: $e")
+    case _ => Nil
+  }
+  require(illegalTriggerEffects.isEmpty,
+    s"Trigger scripts may only use setState/getState/setGlobal/getGlobal: ${illegalTriggerEffects.mkString(", ")}")
+
+  // obsGlobal keys must exist in initialGlobals
+  def collectObsGlobals(expr: Expr): List[String] = expr match
+    case Expr.GlobalRead(key)    => List(key)
+    case Expr.BinOp(_, l, r)     => collectObsGlobals(l) ++ collectObsGlobals(r)
+    case Expr.Not(e)             => collectObsGlobals(e)
+    case _                       => Nil
+
+  val globalKeys = builder.globals.keySet
+  val missingGlobals = builder.regions.flatMap {
+    case Region(_, _, _, _, _, _, Some(cond), _) => collectObsGlobals(cond)
+    case _ => Nil
+  }.filterNot(globalKeys.contains)
+  require(missingGlobals.isEmpty,
+    s"obsGlobal keys missing from world globals: ${missingGlobals.mkString(", ")}")
+
   // Query effects must have a default handler value
   def collectQueryNames(script: Script): List[String] =
     script.statements.flatMap {
-      case Perform(Effect.Query(name))       => List(name.toLowerCase)
-      case Bind(_, Effect.Query(name))       => List(name.toLowerCase)
-      case If(_, thenBranch)                 => collectQueryNames(thenBranch)
-      case IfElse(_, thenBranch, elseBranch) => collectQueryNames(thenBranch) ++ collectQueryNames(elseBranch)
-      case Loop(body)                        => collectQueryNames(body)
-      case HandleWith(_, body)               => collectQueryNames(body)
-      case _                                 => Nil
+      case Perform(Effect.Query(name))        => List(name.toLowerCase)
+      case Bind(_, Effect.Query(name))        => List(name.toLowerCase)
+      case If(_, thenBranch)                  => collectQueryNames(thenBranch)
+      case IfElse(_, thenBranch, elseBranch)  => collectQueryNames(thenBranch) ++ collectQueryNames(elseBranch)
+      case Loop(body)                         => collectQueryNames(body)
+      case HandleWith(_, body)                => collectQueryNames(body)
+      case _                                  => Nil
     }
 
   val queryNames = builder.entities
@@ -142,7 +176,7 @@ def validate(builder: WorldBuilder): Unit =
   // Custom effect validation
   val registeredNames = builder.customEffects.map(_.name.toLowerCase).toSet
   val builtInKeys = Set("move", "jump", "gravity", "spawn", "despawn", "draw",
-                        "setstate", "getstate", "collides", "camera", "setsize")
+                        "setstate", "getstate", "setglobal", "getglobal", "collides", "camera", "setsize")
   val knownKeys = registeredNames ++ builtInKeys ++ queryNames
 
   val effectNames = builder.customEffects.map(_.name.toLowerCase)
@@ -156,13 +190,13 @@ def validate(builder: WorldBuilder): Unit =
 
   def collectCustomPerforms(script: Script): List[String] =
     script.statements.flatMap {
-      case Perform(Effect.Custom(name, _))   => List(name.toLowerCase)
-      case Bind(_, Effect.Custom(name, _))   => List(name.toLowerCase)
-      case If(_, thenBranch)                 => collectCustomPerforms(thenBranch)
-      case Loop(body)                        => collectCustomPerforms(body)
-      case HandleWith(_, body)               => collectCustomPerforms(body)
-      case IfElse(_, thenBranch, elseBranch) => collectCustomPerforms(thenBranch) ++ collectCustomPerforms(elseBranch)
-      case _                                 => Nil
+      case Perform(Effect.Custom(name, _))    => List(name.toLowerCase)
+      case Bind(_, Effect.Custom(name, _))    => List(name.toLowerCase)
+      case If(_, thenBranch)                  => collectCustomPerforms(thenBranch)
+      case Loop(body)                         => collectCustomPerforms(body)
+      case HandleWith(_, body)                => collectCustomPerforms(body)
+      case IfElse(_, thenBranch, elseBranch)  => collectCustomPerforms(thenBranch) ++ collectCustomPerforms(elseBranch)
+      case _                                  => Nil
     }
 
   val performedEffects = builder.entities
@@ -172,19 +206,21 @@ def validate(builder: WorldBuilder): Unit =
   require(unregistered.isEmpty,
     s"Performed custom effects not registered: ${unregistered.mkString(", ")}")
 
-  // All handler keys match a known effect
   def collectHandlers(script: Script): List[Handler] =
     script.statements.flatMap {
-      case HandleWith(h, body)               => h :: collectHandlers(body)
-      case If(_, thenBranch)                 => collectHandlers(thenBranch)
-      case IfElse(_, thenBranch, elseBranch) => collectHandlers(thenBranch) ++ collectHandlers(elseBranch)
-      case Loop(body)                        => collectHandlers(body)
-      case _                                 => Nil
+      case HandleWith(h, body)                => h :: collectHandlers(body)
+      case If(_, thenBranch)                  => collectHandlers(thenBranch)
+      case IfElse(_, thenBranch, elseBranch)  => collectHandlers(thenBranch) ++ collectHandlers(elseBranch)
+      case Loop(body)                         => collectHandlers(body)
+      case _                                  => Nil
     }
 
   val allHandlerKeys = (
     builder.defaultHandlers ++
-    builder.regions.flatMap(_.handlers) ++
+    builder.regions.flatMap {
+      case Region(_, _, _, _, _, Behaviour.Basic(handlers), _, _) => handlers
+      case _ => Nil
+    } ++
     builder.entities.flatMap(e => collectHandlers(e.updateScript) ++ collectHandlers(e.spawnScript))
   ).flatMap(_.handles.keys).map(_.toLowerCase).toSet
 
@@ -204,5 +240,6 @@ def world(body: WorldBuilder ?=> Unit): World =
     builder.regions.toList,
     builder.entities.toList,
     builder.defaultHandlers.toList,
-    builder.customEffects.toList
+    builder.customEffects.toList,
+    builder.globals.toMap
   )

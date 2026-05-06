@@ -9,7 +9,10 @@ enum Expr:
   case Not(expr: Expr)
   case KeyDown(key: String)
   case Propagate
+
+  // Direct reads (for animRules and Regions respectively)
   case StateRead(key: String)
+  case GlobalRead(key: String)
 
 object Expr:
   given Conversion[Double, Expr] = Expr.Num(_)

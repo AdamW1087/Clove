@@ -11,7 +11,8 @@ object LuaEmitter:
     case Expr.Var(name)             => name
     case Expr.Not(e)                => s"not (${emitExpr(e)})"
     case Expr.KeyDown(key)          => s"love.keyboard.isDown(\"$key\")"
-    case Expr.StateRead(key)        => s"-- stateRead(\"$key\") used outside animRule condition"
+    case Expr.StateRead(key)        => s"-- obsState(\"$key\") used outside animRule condition"
+    case Expr.GlobalRead(key)       => s"-- obsGlobal(\"$key\") used outside condition"
 
     case Expr.Propagate =>
       s"{value = 1.0, propagate = true, op = \"*\"}"
@@ -28,6 +29,7 @@ object LuaEmitter:
   // emits expressions in conditions of animation rules (todo merge with emitExpr)
   def emitCondExpr(expr: Expr): String = expr match
     case Expr.StateRead(key)   => s"e[\"$key\"]"
+    case Expr.GlobalRead(key)  => s"globals[\"$key\"]"
     case Expr.Num(v)           => v.toString
     case Expr.Str(v)           => s"\"$v\""
     case Expr.Bool(v)          => v.toString
@@ -99,6 +101,8 @@ object LuaEmitter:
     case Effect.Custom(name, _)  => s"coroutine.yield(\"$name\")"
     case Effect.Query(name)      => s"coroutine.yield(\"$name\")"
     case Effect.ShowState(key)   => s"coroutine.yield(\"ShowState\", \"$key\")"
+    case Effect.SetGlobal(key, v) => s"coroutine.yield(\"SetGlobal\", \"$key\", ${emitExpr(v)})"
+    case Effect.GetGlobal(key)    => s"coroutine.yield(\"GetGlobal\", \"$key\")"
     case Effect.SetSize(w, h)    => s"coroutine.yield(\"SetSize\", ${emitExpr(w)}, ${emitExpr(h)})"
 
   def emitScript(script: Script, indent: Int = 0): String =
@@ -156,8 +160,37 @@ object LuaEmitter:
       case _ => ""
     }.filter(_.nonEmpty).mkString("\n")
 
+  def emitTriggerScript(script: Script): String =
+    if script.statements.isEmpty then ""
+    else emitTriggerStatements(script, indent = 0)
+
+  def emitTriggerStatements(script: Script, indent: Int): String =
+    script.statements
+      .map(emitTriggerStatement(_, indent))
+      .filter(_.nonEmpty)
+      .mkString(" ")
+
+  def emitTriggerStatement(stmt: Statement, indent: Int): String =
+    stmt match
+      case Perform(Effect.SetState(key, v)) =>
+        s"if entities[task_id] then entities[task_id][\"$key\"] = ${emitExpr(v)} end"
+      case Bind(varName, Effect.GetState(key)) =>
+        s"local $varName = entities[task_id] and entities[task_id][\"$key\"]"
+      case Perform(Effect.SetGlobal(key, v)) =>
+        s"globals[\"$key\"] = ${emitExpr(v)}"
+      case Bind(varName, Effect.GetGlobal(key)) =>
+        s"local $varName = globals[\"$key\"]"
+      case Perform(Effect.SetSize(w, h)) =>
+        s"if entities[task_id] then entities[task_id].width = ${emitExpr(w)}; entities[task_id].height = ${emitExpr(h)} end"
+      case If(cond, thenBranch) =>
+        s"if ${emitExpr(cond)} then ${emitTriggerStatements(thenBranch, indent)} end"
+      case IfElse(cond, thenBranch, elseBranch) =>
+        s"if ${emitExpr(cond)} then ${emitTriggerStatements(thenBranch, indent)} else ${emitTriggerStatements(elseBranch, indent)} end"
+      case _ => ""
+
+
   // Below are for custom effects
-  // TODO: try to get other effects in this
+  // TODO: try to get other effects in this (e.g. other effects inside of this)
   def emitEffectImpl(effect: Effect.Custom): String =
     s"""function(task_id, resolved, dt)
       |${emitDirectScript(effect.impl(Expr.Var("resolved"), Expr.Var("dt")), indent = 1)}
