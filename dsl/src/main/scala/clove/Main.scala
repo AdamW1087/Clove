@@ -103,10 +103,6 @@ import clove.dsl.given
         setSize(50.0, 80.0)
       }
 
-      when(getGlobal("testValue") === 100.0) {
-        showState("temp")
-      }
-
       showState("health")
       whenElse(query("isUnderwater")) {
         perform(Drown)

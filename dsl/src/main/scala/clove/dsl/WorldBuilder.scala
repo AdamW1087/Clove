@@ -27,12 +27,6 @@ class WorldBuilder extends ScriptBuilder:
   def setGlobal(key: String, value: Expr): Unit       = globals(key) = value
 
 
-/*
-to add:
-
-any states used in update are defined in spawn 
-any states used by custom effects need be defined on player? all entities??
- */
 def validate(builder: WorldBuilder): Unit =
 
   require(builder.entities.nonEmpty, "World must have at least one entity")
@@ -233,6 +227,63 @@ def validate(builder: WorldBuilder): Unit =
   val invalidKeys = allHandlerKeys.filterNot(knownKeys.contains)
   require(invalidKeys.isEmpty,
     s"Handler keys don't match any known effect: ${invalidKeys.mkString(", ")}")
+
+  // States read in onUpdate must be defined (via setState) in onSpawn
+  def collectStateReads(script: Script): List[String] =
+    script.statements.flatMap {
+      case Bind(_, Effect.GetState(key))         => List(key)
+      case If(_, thenBranch)                     => collectStateReads(thenBranch)
+      case IfElse(_, thenBranch, elseBranch)     => collectStateReads(thenBranch) ++ collectStateReads(elseBranch)
+      case Loop(body)                            => collectStateReads(body)
+      case HandleWith(_, body)                   => collectStateReads(body)
+      case _                                     => Nil
+    }
+
+  def collectStateDefs(script: Script): List[String] =
+    script.statements.flatMap {
+      case Perform(Effect.SetState(key, _))      => List(key)
+      case Bind(_, Effect.SetState(key, _))      => List(key)
+      case If(_, thenBranch)                     => collectStateDefs(thenBranch)
+      case IfElse(_, thenBranch, elseBranch)     => collectStateDefs(thenBranch) ++ collectStateDefs(elseBranch)
+      case Loop(body)                            => collectStateDefs(body)
+      case HandleWith(_, body)                   => collectStateDefs(body)
+      case _                                     => Nil
+    }
+
+  val undefinedStateReads = builder.entities.flatMap { e =>
+    val defined = collectStateDefs(e.spawnScript).toSet
+    val read    = collectStateReads(e.updateScript).toSet
+    (read -- defined).map(key => s"${e.name}: $key")
+  }
+  require(undefinedStateReads.isEmpty,
+    s"States read in onUpdate but not defined in onSpawn: ${undefinedStateReads.mkString(", ")}")
+
+  // States used by custom effects must be defined in spawn of any entity that performs them
+  def collectCustomEffectStateKeys(effect: Effect.Custom): Set[String] =
+    def fromScript(script: Script): List[String] =
+      script.statements.flatMap {
+        case Bind(_, Effect.GetState(key))       => List(key)
+        case Perform(Effect.SetState(key, _))    => List(key)
+        case Bind(_, Effect.SetState(key, _))    => List(key)
+        case If(_, t)                            => fromScript(t)
+        case IfElse(_, t, e)                     => fromScript(t) ++ fromScript(e)
+        case _                                   => Nil
+      }
+    fromScript(effect.impl(Expr.Var("resolved"), Expr.Var("dt"))).toSet
+
+  val customEffectKeys = builder.customEffects.map(e => e.name.toLowerCase -> collectCustomEffectStateKeys(e)).toMap
+
+  val undefinedCustomStateKeys = builder.entities.flatMap { entity =>
+    val defined = collectStateDefs(entity.spawnScript).toSet
+    val performed = collectCustomPerforms(entity.updateScript) ++ collectCustomPerforms(entity.spawnScript)
+    performed.flatMap { name =>
+      customEffectKeys.get(name).toList.flatMap { keys =>
+        (keys -- defined).map(key => s"${entity.name} performs '$name' but '$key' not defined in onSpawn")
+      }
+    }
+  }
+  require(undefinedCustomStateKeys.isEmpty,
+    s"Custom effect state keys not defined in onSpawn: ${undefinedCustomStateKeys.mkString(", ")}")
 
 
 def world(body: WorldBuilder ?=> Unit): World =
