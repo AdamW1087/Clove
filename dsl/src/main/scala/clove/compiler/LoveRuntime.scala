@@ -315,6 +315,7 @@ local function handleMove(task, entityRegions, a, b, dt)
   if mult then dx = dx * mult; dy = dy * mult end
 
   e.x = e.x + dx
+  e.y = e.y + dy
 
   -- Solid region collision (horizontal)
   for _, region in ipairs(regions) do
@@ -325,11 +326,16 @@ local function handleMove(task, entityRegions, a, b, dt)
         elseif dx < 0 then
           e.x = region.x + region.w
         end
+
+        if dy > 0 then
+          e.y = region.y - e.height
+        elseif dy < 0 then
+          e.y = region.y + region.h
+        end
+
       end
     end
   end
-
-  e.y = e.y + dy
 end
 
 local function handleSetSize(task, a, b)
