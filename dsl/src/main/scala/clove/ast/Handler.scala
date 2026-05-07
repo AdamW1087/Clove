@@ -1,7 +1,7 @@
 package clove.ast
 
- // TODO : extend handler capabilites
 case class Handler(
   name: Option[String] = None,
-  handles: Map[String, Expr]
+  handles: Map[String, Expr] = Map.empty,
+  impls: Map[String, (Expr, Expr) => Script] = Map.empty
 )

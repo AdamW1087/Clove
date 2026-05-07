@@ -77,16 +77,21 @@ object LuaEmitter:
 
       case HandleWith(handler, body) =>
         val overrides = handler.handles.map { (k, v) =>
-          s"${k.toLowerCase} = ${LuaEmitter.emitExpr(v)}"
+          s"${k.toLowerCase} = ${emitExpr(v)}"
         }.mkString(", ")
+        val implOverrides = handler.impls.map { (k, f) =>
+          s"${k.toLowerCase}_impl = ${emitHandlerImpl(f)}"
+        }.mkString(", ")
+        val allFields = List(overrides, implOverrides).filter(_.nonEmpty).mkString(", ")
         val nameComment = handler.name.map(n => s" -- $n").getOrElse("")
         val bodyLua = emitScript(body, indent)
         val bodySep = if bodyLua.nonEmpty then s"\n$bodyLua" else ""
-        s"""${pad}coroutine.yield("PushHandler", {$overrides})$nameComment$bodySep"""
+        s"""${pad}coroutine.yield("PushHandler", {$allFields})$nameComment$bodySep"""
 
       case Noop => // TODO
         ""
 
+  // TODO: ensure all states use lowercase (names and keys)
   def emitYield(effect: Effect): String = effect match
     case Effect.Move(dx, dy)     => s"coroutine.yield(\"Move\", ${emitExpr(dx)}, ${emitExpr(dy)})"
     case Effect.Jump()           => s"coroutine.yield(\"Jump\")"
@@ -188,6 +193,11 @@ object LuaEmitter:
         s"if ${emitExpr(cond)} then ${emitTriggerStatements(thenBranch, indent)} else ${emitTriggerStatements(elseBranch, indent)} end"
       case _ => ""
 
+
+  def emitHandlerImpl(f: (Expr, Expr) => Script): String =
+    s"""function(task_id, resolved, dt)
+      |${emitDirectScript(f(Expr.Var("resolved"), Expr.Var("dt")), indent = 1)}
+      |end""".stripMargin
 
   // Below are for custom effects
   // TODO: try to get other effects in this (e.g. other effects inside of this)

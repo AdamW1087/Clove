@@ -27,6 +27,12 @@ class WorldBuilder extends ScriptBuilder:
   def setGlobal(key: String, value: Expr): Unit       = globals(key) = value
 
 
+/*
+to add:
+
+any states used in update are defined in spawn 
+any states used by custom effects need be defined on player? all entities??
+ */
 def validate(builder: WorldBuilder): Unit =
 
   require(builder.entities.nonEmpty, "World must have at least one entity")
@@ -222,7 +228,7 @@ def validate(builder: WorldBuilder): Unit =
       case _ => Nil
     } ++
     builder.entities.flatMap(e => collectHandlers(e.updateScript) ++ collectHandlers(e.spawnScript))
-  ).flatMap(_.handles.keys).map(_.toLowerCase).toSet
+  ).flatMap(h => h.handles.keys ++ h.impls.keys).map(_.toLowerCase).toSet
 
   val invalidKeys = allHandlerKeys.filterNot(knownKeys.contains)
   require(invalidKeys.isEmpty,

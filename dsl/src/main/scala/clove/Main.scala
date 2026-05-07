@@ -20,19 +20,23 @@ import clove.dsl.given
   }
 
   val physics = handler("Gravity" -> 9.8, "Jump" -> 5.0, "Move" -> 1.0, 
-  "Drown" -> 1.0,
+  "Drown" -> 0.0,
   "Freeze" -> 0.0,
   "isUnderwater" -> false
   )
 
-  val noGravity = handler("Gravity" -> 0.0)
 
   val lowGravity = handler("Gravity" -> 2.0)
 
   val waterDrag = handler("Move" -> 0.3 * propagate())
   val slowMotion = handler("move" -> 0.3)
 
-  val waterRegion = handler("Gravity" -> 2.0, "Move" -> 0.3, "Drown" -> 10.0, "isUnderwater" -> true)
+  val waterRegion = handler("Move" -> 0.3, 
+                            "Drown" -> 50.0, 
+                            "isUnderwater" -> true,
+                            "Jump" -> 5.0 via 
+                            { (v, dt) => script { setState("vy", -v) } }
+                            )
 
   val highJump = handler("Jump" -> 10.0)
 
@@ -59,6 +63,7 @@ import clove.dsl.given
       setSize(50.0, 80.0)
       setState("facingRight", true)
       setSpritesheet("assets/player_sheet.png", 64, 64)
+      setState("air", 100.0)
 
       setState("temp", 50.0)
       setState("health", 50.0)
@@ -113,12 +118,10 @@ import clove.dsl.given
 
 
   val setup = world {
-    region("test23", 200, 0, 300, 600, Some(0.0, 0.5, 1.0))(lowGravity, waterRegion)
+    region("test23", 200, 0, 300, 600, Some(0.0, 0.5, 1.0))(waterRegion)
     
-    triggerable("test", 200, 400, 150, 100
-    , Some(0.0, 0.0, 0.0), 
-    onEnter = { setGlobal("testValue", 100.0) },
-    onExit = { setGlobal("testValue", 50.0) }
+    platform("test", 200, 400, 150, 100
+    , Some(0.0, 0.0, 0.0)
     )
     spawn(player)
     spawn(item)

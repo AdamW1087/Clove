@@ -21,11 +21,15 @@ object LoveRuntime:
           val overrides = handlers.flatMap(_.handles).map { (k, v) =>
             s"${k.toLowerCase} = ${LuaEmitter.emitExpr(v)}"
           }.mkString(", ")
-
+          val implOverrides = handlers.flatMap(_.impls).map { (k, f) =>
+            s"${k.toLowerCase}_impl = ${LuaEmitter.emitHandlerImpl(f)}"
+          }.mkString(", ")
+          val allFields = List(overrides, implOverrides).filter(_.nonEmpty).mkString(", ")
+          val hasHandlers = handlers.exists(h => h.handles.nonEmpty || h.impls.nonEmpty)
           val (cr, cg, cb) = r.colour.getOrElse((1.0, 1.0, 1.0))
           s"""  {id = $idStr, x = ${r.x}, y = ${r.y}, w = ${r.w}, h = ${r.h},
              |   type = "basic", hasColor = ${r.colour.isDefined.toString}, r = $cr, g = $cg, b = $cb,
-             |   hasHandlers = ${handlers.nonEmpty.toString}, $overrides, condition = $condStr}""".stripMargin
+             |   hasHandlers = ${hasHandlers.toString}, $allFields, condition = $condStr}""".stripMargin
 
         case Behaviour.Solid(oneWay) =>
           val (cr, cg, cb) = r.colour.getOrElse((1.0, 1.0, 1.0))
@@ -71,9 +75,13 @@ object LoveRuntime:
     }.mkString("\n")
 
     val defaultHandlerTable = world.defaultHandlers.map { h =>
-      h.handles.map { (k, v) =>
+      val values = h.handles.map { (k, v) =>
         s"  ${k.toLowerCase} = ${LuaEmitter.emitExpr(v)}"
-      }.mkString(",\n")
+      }
+      val impls = h.impls.map { (k, f) =>
+        s"  ${k.toLowerCase}_impl = ${LuaEmitter.emitHandlerImpl(f)}"
+      }
+      (values ++ impls).mkString(",\n")
     }.mkString(",\n")
 
     val helperFunctions =
@@ -104,43 +112,53 @@ object LoveRuntime:
     }.mkString(",\n")
 
     val resolveFunction =
-      s"""local function resolve(task, entityRegions, key, i)
+      s"""-- Returns resolved value and first impl found during the walk (if any)
+        |local function resolve(task, entityRegions, key, i, foundImpl)
         |  local taskRegions = entityRegions[task.id] or {}
         |  local stackSize = #task.handlerStack
         |  local regionSize = #taskRegions
         |  i = i or (stackSize + regionSize)
+        |  foundImpl = foundImpl or nil
         |
         |  while i >= 1 do
-        |    local entry
+        |    local entry, entryImpl
         |    if i > regionSize then
-        |      entry = task.handlerStack[i - regionSize][key]
+        |      entry     = task.handlerStack[i - regionSize][key]
+        |      entryImpl = task.handlerStack[i - regionSize][key .. "_impl"]
         |    else
-        |      entry = taskRegions[i] and taskRegions[i][key]
+        |      entry     = taskRegions[i] and taskRegions[i][key]
+        |      entryImpl = taskRegions[i] and taskRegions[i][key .. "_impl"]
+        |    end
+        |
+        |    if foundImpl == nil and entryImpl ~= nil then
+        |      foundImpl = entryImpl
         |    end
         |
         |    if entry ~= nil then
         |      if type(entry) == "table" and entry.propagate then
-        |        local rest = resolve(task, entityRegions, key, i - 1)
+        |        local rest, restImpl = resolve(task, entityRegions, key, i - 1, foundImpl)
+        |        if foundImpl == nil then foundImpl = restImpl end
         |
         |        local neutral = (entry.op == "+" or entry.op == "-") and 0.0 or 1.0
         |        local a = entry.leftVal and entry.value or (rest or neutral)
         |        local b = entry.leftVal and (rest or neutral) or entry.value
         |
-        |        if entry.op == "*" then return a * b
-        |        elseif entry.op == "+" then return a + b
-        |        elseif entry.op == "-" then return a - b
-        |        elseif entry.op == "/" then return a / b
+        |        if entry.op == "*" then return a * b, foundImpl
+        |        elseif entry.op == "+" then return a + b, foundImpl
+        |        elseif entry.op == "-" then return a - b, foundImpl
+        |        elseif entry.op == "/" then return a / b, foundImpl
         |        end
-        |
         |      else
-        |        return entry
+        |        return entry, foundImpl
         |      end
         |    end
         |    i = i - 1
         |  end
         |
-        |  if defaultHandlers[key] ~= nil then return defaultHandlers[key] end
-        |  return nil
+        |  local defaultImpl = defaultHandlers[key .. "_impl"]
+        |  if foundImpl == nil then foundImpl = defaultImpl end
+        |  if defaultHandlers[key] ~= nil then return defaultHandlers[key], foundImpl end
+        |  return nil, foundImpl
         |end""".stripMargin
 
     val animUpdateLoop =
@@ -185,6 +203,8 @@ local globals = {
 $globalsTable
 }
 
+$helperFunctions
+
 local defaultHandlers = {
 $defaultHandlerTable
 }
@@ -192,8 +212,6 @@ $defaultHandlerTable
 local regions = {
 $regionTable
 }
-
-$helperFunctions
 
 
 local uiDrawList = {}
@@ -411,11 +429,32 @@ function love.update(dt)
         table.insert(task.handlerStack, a)
 
       elseif effect == "Gravity" then
-        handleGravity(task, entityRegions, dt)
+        local resolved, impl = resolve(task, entityRegions, "gravity")
+        if impl then
+          impl(task.id, resolved, dt)
+        else
+          handleGravity(task, entityRegions, dt)
+        end
 
       elseif effect == "Move" then
-        handleMove(task, entityRegions, a, b, dt)
+        local resolved, impl = resolve(task, entityRegions, "move")
+        if impl then
+          impl(task.id, resolved, dt)
+        else
+          handleMove(task, entityRegions, a, b, dt)
+        end
 
+      elseif effect == "Jump" then
+        local resolved, impl = resolve(task, entityRegions, "jump")
+        if impl then
+          impl(task.id, resolved, dt)
+        else
+          local e = entities[task.id]
+          if e and e.grounded then
+            e.vy = -resolved
+            e.grounded = false
+          end
+        end
 
       elseif effect == "Despawn" then
         entities[task.id] = nil
@@ -443,14 +482,6 @@ function love.update(dt)
       elseif effect == "Camera" then
         camera.follow = task.id
 
-      -- todo: fix grounded force (e.g. underwater)
-      elseif effect == "Jump" then
-        local e = entities[task.id]
-        if e and e.grounded then
-          e.vy = -(resolve(task, entityRegions, "jump"))
-          e.grounded = false
-        end
-
       elseif effect == "ShowState" then
         local e = entities[task.id]
         if e and e[a] ~= nil then
@@ -458,12 +489,16 @@ function love.update(dt)
         end
       else
         local effect_key = effect:lower()
-        local impl = effect_impls[effect_key]
-        if impl then
-          local resolved = resolve(task, entityRegions, effect_key)
-          impl(task.id, resolved, dt)
+        local resolved, handlerImpl = resolve(task, entityRegions, effect_key)
+        if handlerImpl then
+          handlerImpl(task.id, resolved, dt)
         else
-          response = resolve(task, entityRegions, effect_key)
+          local impl = effect_impls[effect_key]
+          if impl then
+            impl(task.id, resolved, dt)
+          else
+            response = resolved
+          end
         end
       end
 
