@@ -102,7 +102,6 @@ object LuaEmitter:
     case Effect.Move(dx, dy)     => s"coroutine.yield(\"Move\", ${emitExpr(dx)}, ${emitExpr(dy)})"
     case Effect.Jump()           => s"coroutine.yield(\"Jump\")"
     case Effect.Gravity()        => s"coroutine.yield(\"Gravity\")"
-    case Effect.Spawn()          => s"coroutine.yield(\"Spawn\")"
     case Effect.Despawn()        => s"coroutine.yield(\"Despawn\")"
     case Effect.Draw()           => s"coroutine.yield(\"Draw\")"
     case Effect.SetState(key, v) => s"coroutine.yield(\"SetState\", \"$key\", ${emitExpr(v)})"

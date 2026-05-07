@@ -175,7 +175,7 @@ def validate(builder: WorldBuilder): Unit =
 
   // Custom effect validation
   val registeredNames = builder.customEffects.map(_.name.toLowerCase).toSet
-  val builtInKeys = Set("move", "jump", "gravity", "spawn", "despawn", "draw",
+  val builtInKeys = Set("move", "jump", "gravity", "despawn", "draw",
                         "setstate", "getstate", "setglobal", "getglobal", "collides", "camera", "setsize")
   val knownKeys = registeredNames ++ builtInKeys ++ queryNames
 

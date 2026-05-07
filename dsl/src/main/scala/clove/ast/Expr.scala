@@ -1,15 +1,20 @@
 package clove.ast
 
 enum Expr:
+  // Numerical
   case Num(value: Double)
-  case Str(value: String)
-  case Bool(value: Boolean)
-  case Var(name: String)
-  case BinOp(op: String, left: Expr, right: Expr)
   case Not(expr: Expr)
   case Negate(expr: Expr)
   case Max(exprs: Expr*)
   case Min(exprs: Expr*)
+
+  // Other types
+  case Str(value: String)
+  case Bool(value: Boolean)
+  case Var(name: String)
+  case BinOp(op: String, left: Expr, right: Expr)
+
+  // User input and propagating values in handlers
   case KeyDown(key: String)
   case Propagate
 

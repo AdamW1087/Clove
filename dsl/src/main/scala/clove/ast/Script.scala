@@ -1,15 +1,24 @@
 package clove.ast
 
+// Defines all logic in Clove
 case class Script(statements: List[Statement])
 
 sealed trait Statement
 
+// Assigns a variable (varName) to the return value of an Effect
 case class Bind(varName: String, effect: Effect) extends Statement
+
+// Registers the effect as acting on an entity 
 case class Perform(effect: Effect) extends Statement
+
+
 case class If(condition: Expr, thenBranch: Script) extends Statement
 case class IfElse(condition: Expr, thenBranch: Script, elseBranch: Script) extends Statement
-case class Loop(body: Script) extends Statement // TODO (explicit loops)
-case class Return(value: Expr) extends Statement // TODO (early returns)
+
+// TODO
+case class Loop(body: Script) extends Statement // explicit loops
+case class Return(value: Expr) extends Statement // early returns
+case object Noop extends Statement // empty branches
 
 /* 
 TODO: look into setting orderings to have these float to the top
@@ -42,9 +51,9 @@ vs
  With this, for scoped effects i believe it is just adding from the top to bottom, not necessarily in order of which has been true for the longest?
  also not fully sure if this causes issues
 */
+// Assigns a handler for a specified scope in an entity
 case class HandleWith(handler: Handler, body: Script = Script(List.empty)) extends Statement
 
-case object Noop extends Statement // TODO (empty branches)t
 
 // Configurations for onSpawn (no coroutine yields)
 case class Configure(config: SpawnConfig) extends Statement

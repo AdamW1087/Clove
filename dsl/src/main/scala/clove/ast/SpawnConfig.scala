@@ -1,6 +1,6 @@
 package clove.ast
 
-
+// Setting player sprites
 enum SpawnConfig:
   case SetSprite(path: String)
   case SetSpritesheet(path: String, frameWidth: Int, frameHeight: Int)
