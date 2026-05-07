@@ -1,4 +1,5 @@
 import clove.dsl.*
+import clove.dsl.worldbuilder.*
 import clove.compiler.*
 import clove.ast.*
 import clove.dsl.given

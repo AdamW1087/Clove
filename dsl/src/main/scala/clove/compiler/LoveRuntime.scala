@@ -1,7 +1,8 @@
 package clove.compiler
 
 import clove.ast.*
-import clove.dsl.{World, Region, Behaviour}
+import clove.dsl.{Region, Behaviour}
+import clove.dsl.worldbuilder.World
 
 object LoveRuntime:
 
