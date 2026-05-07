@@ -7,6 +7,9 @@ enum Expr:
   case Var(name: String)
   case BinOp(op: String, left: Expr, right: Expr)
   case Not(expr: Expr)
+  case Negate(expr: Expr)
+  case Max(exprs: Expr*)
+  case Min(exprs: Expr*)
   case KeyDown(key: String)
   case Propagate
 

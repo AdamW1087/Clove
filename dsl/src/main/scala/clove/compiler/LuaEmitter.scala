@@ -10,6 +10,9 @@ object LuaEmitter:
     case Expr.Bool(v)               => v.toString
     case Expr.Var(name)             => name
     case Expr.Not(e)                => s"not (${emitExpr(e)})"
+    case Expr.Negate(e)             => s"(-(${emitExpr(e)}))"
+    case Expr.Max(exprs*)           => s"math.max(${exprs.map(emitExpr).mkString(", ")})"
+    case Expr.Min(exprs*)           => s"math.min(${exprs.map(emitExpr).mkString(", ")})"
     case Expr.KeyDown(key)          => s"love.keyboard.isDown(\"$key\")"
     case Expr.StateRead(key)        => s"-- obsState(\"$key\") used outside animRule condition"
     case Expr.GlobalRead(key)       => s"-- obsGlobal(\"$key\") used outside condition"
@@ -35,6 +38,9 @@ object LuaEmitter:
     case Expr.Bool(v)          => v.toString
     case Expr.Var(name)        => name
     case Expr.Not(e)           => s"not (${emitCondExpr(e)})"
+    case Expr.Negate(e)        => s"(-(${emitCondExpr(e)}))"
+    case Expr.Max(exprs*)      => s"math.max(${exprs.map(emitExpr).mkString(", ")})"
+    case Expr.Min(exprs*)      => s"math.min(${exprs.map(emitExpr).mkString(", ")})"
     case Expr.KeyDown(key)     => s"love.keyboard.isDown(\"$key\")"
     case Expr.BinOp(op, l, r)  => s"(${emitCondExpr(l)} $op ${emitCondExpr(r)})"
     case Expr.Propagate        => "" // shouldnt be a propagate here

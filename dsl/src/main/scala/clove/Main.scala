@@ -6,10 +6,9 @@ import clove.dsl.given
 @main def run(): Unit =
 
 
-  // todo: maybe fix with max? then air can slowly rebuild
   val Drown = customEffect("Drown") { (value, dt) =>
     script {
-      setState("air", getState("air") - value * dt)
+      setState("air", max(getState("air") - value * dt, 0.0))
     }
   }
 

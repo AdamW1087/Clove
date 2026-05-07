@@ -178,6 +178,10 @@ def obsState(key: String): Expr = Expr.StateRead(key)
 
 def obsGlobal(key: String): Expr = Expr.GlobalRead(key)
 
+def max(exprs: Expr*): Expr = Expr.Max(exprs*)
+
+def min(exprs: Expr*): Expr = Expr.Min(exprs*)
+
 // TODO: add a flip (e.g. animeRule(..., flipped = true)) for horizontal flipping
 def animRule(name: String, frames: List[Int], fps: Int)(using b: ScriptBuilder): Unit =
   b += Configure(SpawnConfig.AnimRule(name, frames, fps, condition = None))
