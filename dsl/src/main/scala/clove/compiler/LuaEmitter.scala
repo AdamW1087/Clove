@@ -4,51 +4,44 @@ import clove.ast.*
 
 object LuaEmitter:
 
-  def emitExpr(expr: Expr): String = expr match
-    case Expr.Num(v)                => v.toString
-    case Expr.Str(v)                => s"\"$v\""
-    case Expr.Bool(v)               => v.toString
-    case Expr.Var(name)             => name
-    case Expr.Not(e)                => s"not (${emitExpr(e)})"
-    case Expr.Negate(e)             => s"(-(${emitExpr(e)}))"
-    case Expr.Max(exprs*)           => s"math.max(${exprs.map(emitExpr).mkString(", ")})"
-    case Expr.Min(exprs*)           => s"math.min(${exprs.map(emitExpr).mkString(", ")})"
-    case Expr.KeyDown(key)          => s"love.keyboard.isDown(\"$key\")"
-    case Expr.StateRead(key)        => s"-- obsState(\"$key\") used outside animRule condition"
-    case Expr.GlobalRead(key)       => s"-- obsGlobal(\"$key\") used outside condition"
+  // Expression emission
+  // inCondition - true when emitting inside animRule/region conditions, where StateRead/GlobalRead map to direct table access
+  def emitExpr(expr: Expr, inCondition: Boolean = false): String = expr match
+    case Expr.Num(v)       => v.toString
+    case Expr.Str(v)       => s"\"$v\""
+    case Expr.Bool(v)      => v.toString
+    case Expr.Var(name)    => name
+    case Expr.Not(e)       => s"not (${emitExpr(e, inCondition)})"
+    case Expr.Negate(e)    => s"(-(${emitExpr(e, inCondition)}))"
+    case Expr.Max(exprs*)  => s"math.max(${exprs.map(emitExpr(_, inCondition)).mkString(", ")})"
+    case Expr.Min(exprs*)  => s"math.min(${exprs.map(emitExpr(_, inCondition)).mkString(", ")})"
+    case Expr.KeyDown(key) => s"love.keyboard.isDown(\"$key\")"
+
+    case Expr.StateRead(key) =>
+      if inCondition then s"e[\"$key\"]"
+      else s"-- obsState(\"$key\") used outside animRule condition"
+
+    case Expr.GlobalRead(key) =>
+      if inCondition then s"globals[\"$key\"]"
+      else s"-- obsGlobal(\"$key\") used outside condition"
 
     case Expr.Propagate =>
       s"{value = 1.0, propagate = true, op = \"*\"}"
 
     case Expr.BinOp(op, l, Expr.Propagate) =>
-      s"{value = ${emitExpr(l)}, propagate = true, op = \"$op\",  leftVal = true}"
+      s"{value = ${emitExpr(l)}, propagate = true, op = \"$op\", leftVal = true}"
 
     case Expr.BinOp(op, Expr.Propagate, r) =>
-      s"{value = ${emitExpr(r)}, propagate = true, op = \"$op\",  leftVal = false}"
+      s"{value = ${emitExpr(r)}, propagate = true, op = \"$op\", leftVal = false}"
 
     case Expr.BinOp(op, l, r) =>
-      s"(${emitExpr(l)} $op ${emitExpr(r)})"
-
-  // emits expressions in conditions of animation rules (todo merge with emitExpr)
-  def emitCondExpr(expr: Expr): String = expr match
-    case Expr.StateRead(key)   => s"e[\"$key\"]"
-    case Expr.GlobalRead(key)  => s"globals[\"$key\"]"
-    case Expr.Num(v)           => v.toString
-    case Expr.Str(v)           => s"\"$v\""
-    case Expr.Bool(v)          => v.toString
-    case Expr.Var(name)        => name
-    case Expr.Not(e)           => s"not (${emitCondExpr(e)})"
-    case Expr.Negate(e)        => s"(-(${emitCondExpr(e)}))"
-    case Expr.Max(exprs*)      => s"math.max(${exprs.map(emitExpr).mkString(", ")})"
-    case Expr.Min(exprs*)      => s"math.min(${exprs.map(emitExpr).mkString(", ")})"
-    case Expr.KeyDown(key)     => s"love.keyboard.isDown(\"$key\")"
-    case Expr.BinOp(op, l, r)  => s"(${emitCondExpr(l)} $op ${emitCondExpr(r)})"
-    case Expr.Propagate        => "" // shouldnt be a propagate here
+      s"(${emitExpr(l, inCondition)} $op ${emitExpr(r, inCondition)})"
 
   def emitExprAsString(expr: Expr): String = expr match
     case Expr.Var(name) => s"\"$name\""
     case other          => emitExpr(other)
 
+  // Statement emission
   def emitStatement(stmt: Statement, indent: Int): String =
     val pad = "  " * indent
     stmt match
@@ -68,10 +61,10 @@ object LuaEmitter:
 
       case IfElse(cond, thenBranch, elseBranch) =>
         s"""${pad}if ${emitExpr(cond)} then
-          |${emitScript(thenBranch, indent + 1)}
-          |${pad}else
-          |${emitScript(elseBranch, indent + 1)}
-          |${pad}end""".stripMargin
+           |${emitScript(thenBranch, indent + 1)}
+           |${pad}else
+           |${emitScript(elseBranch, indent + 1)}
+           |${pad}end""".stripMargin
 
       case Loop(body) => // TODO
         s"""${pad}while true do
@@ -82,13 +75,13 @@ object LuaEmitter:
         s"${pad}return ${emitExpr(value)}"
 
       case HandleWith(handler, body) =>
-        val overrides = handler.handles.map { (k, v) =>
+        val values = handler.handles.map { (k, v) =>
           s"${k.toLowerCase} = ${emitExpr(v)}"
         }.mkString(", ")
-        val implOverrides = handler.impls.map { (k, f) =>
-          s"${k.toLowerCase}_impl = ${emitHandlerImpl(f)}"
+        val impls = handler.impls.map { (k, f) =>
+          s"${k.toLowerCase}_impl = ${emitImpl(f)}"
         }.mkString(", ")
-        val allFields = List(overrides, implOverrides).filter(_.nonEmpty).mkString(", ")
+        val allFields = List(values, impls).filter(_.nonEmpty).mkString(", ")
         val nameComment = handler.name.map(n => s" -- $n").getOrElse("")
         val bodyLua = emitScript(body, indent)
         val bodySep = if bodyLua.nonEmpty then s"\n$bodyLua" else ""
@@ -97,23 +90,22 @@ object LuaEmitter:
       case Noop => // TODO
         ""
 
-  // TODO: ensure all states use lowercase (names and keys)
   def emitYield(effect: Effect): String = effect match
-    case Effect.Move(dx, dy)     => s"coroutine.yield(\"Move\", ${emitExpr(dx)}, ${emitExpr(dy)})"
-    case Effect.Jump()           => s"coroutine.yield(\"Jump\")"
-    case Effect.Gravity()        => s"coroutine.yield(\"Gravity\")"
-    case Effect.Despawn()        => s"coroutine.yield(\"Despawn\")"
-    case Effect.Draw()           => s"coroutine.yield(\"Draw\")"
-    case Effect.SetState(key, v) => s"coroutine.yield(\"SetState\", \"$key\", ${emitExpr(v)})"
-    case Effect.GetState(key)    => s"coroutine.yield(\"GetState\", \"$key\")"
-    case Effect.Collides(target) => s"coroutine.yield(\"Collides\", ${emitExprAsString(target)})"
-    case Effect.Camera()         => s"coroutine.yield(\"Camera\")"
-    case Effect.Custom(name, _)  => s"coroutine.yield(\"$name\")"
-    case Effect.Query(name)      => s"coroutine.yield(\"$name\")"
-    case Effect.ShowState(key)   => s"coroutine.yield(\"ShowState\", \"$key\")"
+    case Effect.Move(dx, dy)      => s"coroutine.yield(\"Move\", ${emitExpr(dx)}, ${emitExpr(dy)})"
+    case Effect.Jump()            => s"coroutine.yield(\"Jump\")"
+    case Effect.Gravity()         => s"coroutine.yield(\"Gravity\")"
+    case Effect.Despawn()         => s"coroutine.yield(\"Despawn\")"
+    case Effect.Draw()            => s"coroutine.yield(\"Draw\")"
+    case Effect.SetState(key, v)  => s"coroutine.yield(\"SetState\", \"$key\", ${emitExpr(v)})"
+    case Effect.GetState(key)     => s"coroutine.yield(\"GetState\", \"$key\")"
     case Effect.SetGlobal(key, v) => s"coroutine.yield(\"SetGlobal\", \"$key\", ${emitExpr(v)})"
     case Effect.GetGlobal(key)    => s"coroutine.yield(\"GetGlobal\", \"$key\")"
-    case Effect.SetSize(w, h)    => s"coroutine.yield(\"SetSize\", ${emitExpr(w)}, ${emitExpr(h)})"
+    case Effect.Collides(target)  => s"coroutine.yield(\"Collides\", ${emitExprAsString(target)})"
+    case Effect.Camera()          => s"coroutine.yield(\"Camera\")"
+    case Effect.Custom(name, _)   => s"coroutine.yield(\"$name\")"
+    case Effect.Query(name)       => s"coroutine.yield(\"$name\")"
+    case Effect.ShowState(key)    => s"coroutine.yield(\"ShowState\", \"$key\")"
+    case Effect.SetSize(w, h)     => s"coroutine.yield(\"SetSize\", ${emitExpr(w)}, ${emitExpr(h)})"
 
   def emitScript(script: Script, indent: Int = 0): String =
     script.statements
@@ -131,23 +123,59 @@ object LuaEmitter:
        |  end
        |end)""".stripMargin
 
+  // Direct mode emission (no coroutine — for custom effects, handler impls, trigger scripts)
+  def emitDirectStatement(stmt: Statement, indent: Int): String =
+    val pad = "  " * indent
+    stmt match
+      case Bind(varName, Effect.GetState(key)) =>
+        s"${pad}local $varName = entities[task_id] and entities[task_id][\"$key\"]"
+      case Bind(varName, Effect.GetGlobal(key)) =>
+        s"${pad}local $varName = globals[\"$key\"]"
+
+      case Perform(Effect.SetState(key, v)) =>
+        s"${pad}if entities[task_id] then entities[task_id][\"$key\"] = ${emitExpr(v)} end"
+      case Perform(Effect.SetGlobal(key, v)) =>
+        s"${pad}globals[\"$key\"] = ${emitExpr(v)}"
+
+      case Perform(Effect.SetSize(w, h)) =>
+        s"${pad}if entities[task_id] then entities[task_id][\"width\"] = ${emitExpr(w)}; entities[task_id][\"height\"] = ${emitExpr(h)} end"
+
+      case If(cond, thenBranch) =>
+        s"""${pad}if ${emitExpr(cond)} then
+           |${emitDirectScript(thenBranch, indent + 1)}
+           |${pad}end""".stripMargin
+
+      case IfElse(cond, thenBranch, elseBranch) =>
+        s"""${pad}if ${emitExpr(cond)} then
+           |${emitDirectScript(thenBranch, indent + 1)}
+           |${pad}else
+           |${emitDirectScript(elseBranch, indent + 1)}
+           |${pad}end""".stripMargin
+
+      case _ => s"${pad}-- unsupported in direct mode"
+
+  def emitDirectScript(script: Script, indent: Int = 0): String =
+    script.statements
+      .map(emitDirectStatement(_, indent))
+      .filter(_.nonEmpty)
+      .mkString("\n")
+
+  // Shared impl emitter for handler 'via' overrides and custom effect bodies
+  def emitImpl(f: (Expr, Expr) => Script): String =
+    s"""function(task_id, resolved, dt)
+       |${emitDirectScript(f(Expr.Var("resolved"), Expr.Var("dt")), indent = 1)}
+       |end""".stripMargin
+
+  // Spawn script emission
   def emitSpawnScript(entityId: String, script: Script): String =
     script.statements.map {
-      // TODO: clean up binds at spawn time
-      case Bind(_, Effect.SetState(key, value)) =>
-        s"  entities[\"$entityId\"][\"$key\"] = ${emitExpr(value)}"
       case Perform(Effect.SetState(key, value)) =>
         s"  entities[\"$entityId\"][\"$key\"] = ${emitExpr(value)}"
 
-      // SetSize in spawn — direct assignment, no coroutine needed
       case Perform(Effect.SetSize(w, h)) =>
         s"""  entities["$entityId"]["width"] = ${emitExpr(w)}
            |  entities["$entityId"]["height"] = ${emitExpr(h)}""".stripMargin
-      case Bind(_, Effect.SetSize(w, h)) =>
-        s"""  entities["$entityId"]["width"] = ${emitExpr(w)}
-           |  entities["$entityId"]["height"] = ${emitExpr(h)}""".stripMargin
 
-      // SpawnConfig cases via Configure
       case Configure(SpawnConfig.SetSprite(path)) =>
         s"  entities[\"$entityId\"][\"spritePath\"] = \"$path\""
 
@@ -164,70 +192,13 @@ object LuaEmitter:
         val luaFrames = frames.map(_ + 1).mkString(", ")
         val condFn = condition match
           case None       => "function(e) return true end"
-          case Some(expr) => s"function(e) return ${emitCondExpr(expr)} end"
+          case Some(expr) => s"function(e) return ${emitExpr(expr, inCondition = true)} end"
         s"""  table.insert(entities["$entityId"]["anims"], {name = "$name", frames = {$luaFrames}, fps = $fps, condition = $condFn})"""
 
       case _ => ""
     }.filter(_.nonEmpty).mkString("\n")
 
+  // Trigger scripts run as inline lambdas inside the region table
   def emitTriggerScript(script: Script): String =
     if script.statements.isEmpty then ""
-    else emitTriggerStatements(script, indent = 0)
-
-  def emitTriggerStatements(script: Script, indent: Int): String =
-    script.statements
-      .map(emitTriggerStatement(_, indent))
-      .filter(_.nonEmpty)
-      .mkString(" ")
-
-  def emitTriggerStatement(stmt: Statement, indent: Int): String =
-    stmt match
-      case Perform(Effect.SetState(key, v)) =>
-        s"if entities[task_id] then entities[task_id][\"$key\"] = ${emitExpr(v)} end"
-      case Bind(varName, Effect.GetState(key)) =>
-        s"local $varName = entities[task_id] and entities[task_id][\"$key\"]"
-      case Perform(Effect.SetGlobal(key, v)) =>
-        s"globals[\"$key\"] = ${emitExpr(v)}"
-      case Bind(varName, Effect.GetGlobal(key)) =>
-        s"local $varName = globals[\"$key\"]"
-      case Perform(Effect.SetSize(w, h)) =>
-        s"if entities[task_id] then entities[task_id].width = ${emitExpr(w)}; entities[task_id].height = ${emitExpr(h)} end"
-      case If(cond, thenBranch) =>
-        s"if ${emitExpr(cond)} then ${emitTriggerStatements(thenBranch, indent)} end"
-      case IfElse(cond, thenBranch, elseBranch) =>
-        s"if ${emitExpr(cond)} then ${emitTriggerStatements(thenBranch, indent)} else ${emitTriggerStatements(elseBranch, indent)} end"
-      case _ => ""
-
-
-  def emitHandlerImpl(f: (Expr, Expr) => Script): String =
-    s"""function(task_id, resolved, dt)
-      |${emitDirectScript(f(Expr.Var("resolved"), Expr.Var("dt")), indent = 1)}
-      |end""".stripMargin
-
-  // Below are for custom effects
-  // TODO: try to get other effects in this (e.g. other effects inside of this)
-  def emitEffectImpl(effect: Effect.Custom): String =
-    s"""function(task_id, resolved, dt)
-      |${emitDirectScript(effect.impl(Expr.Var("resolved"), Expr.Var("dt")), indent = 1)}
-      |end""".stripMargin
-
-  def emitDirectScript(script: Script, indent: Int = 0): String =
-    script.statements
-      .map(emitDirectStatement(_, indent))
-      .filter(_.nonEmpty)
-      .mkString("\n")
-
-  def emitDirectStatement(stmt: Statement, indent: Int): String =
-    val pad = "  " * indent
-    stmt match
-      case Bind(varName, Effect.GetState(key)) =>
-        s"${pad}local $varName = clove_getState(task_id, \"$key\")"
-      case Perform(Effect.SetState(key, v)) =>
-        s"${pad}clove_setState(task_id, \"$key\", ${emitExpr(v)})"
-      case Bind(_, Effect.SetState(key, v)) =>
-        s"${pad}clove_setState(task_id, \"$key\", ${emitExpr(v)})"
-      case If(cond, thenBranch) =>
-        s"""${pad}if ${emitExpr(cond)} then
-          |${emitDirectScript(thenBranch, indent + 1)}
-          |${pad}end""".stripMargin
-      case _ => s"${pad}-- unsupported in direct mode"
+    else emitDirectScript(script).replace("\n", "; ")
