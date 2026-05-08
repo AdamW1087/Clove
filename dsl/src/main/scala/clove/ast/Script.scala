@@ -22,34 +22,43 @@ case object Noop extends Statement // empty branches
 
 /* 
 TODO: look into setting orderings to have these float to the top
-ex (the first works as intended) (techincally both work as intended)
+update: i think having scoped effects staying where they are in terms of other effects is important
+e.g. pushing a noMove handler before trying to move
+the main question is is it safe to float things like scoped effects to the top? and performs at the bottom 
 
-val player = entity("player")
-  .onSpawn {
-    setState("air", 100.0)
-  }
-  .onUpdate {
-    when(getState("air") <= 0.0) {
-      handleWith(noMove)
-    }
-    when(keyDown("d")) {
-      move(500.0, 0.0)
-    }
-  }
+also
+perform(Drown)
+showState("air")
 
-vs
+works as expeected
 
-  .onUpdate {
-    when(keyDown("d")) {
-      move(500.0, 0.0)
-    }
-    when(getState("air") <= 0.0) {
-      handleWith(noMove)
-    }
-  }
+showState("air")
+perform(Drown)
 
- With this, for scoped effects i believe it is just adding from the top to bottom, not necessarily in order of which has been true for the longest?
- also not fully sure if this causes issues
+only shows air of previous frame (does make sense)
+similarly
+
+val drownFast = handler("drown" -> 10.0)
+
+
+when(keyDown("w")) {
+  handleWith(drownFast)
+}
+
+perform(Drown)
+
+the above works with drowning fast
+
+perform(Drown)
+
+when(keyDown("w")) {
+  handleWith(drownFast)
+}
+
+as perform is done before the handler is on, it is not acted on the player
+
+should performs automatically float to the bottom?
+
 */
 // Assigns a handler for a specified scope in an entity
 case class HandleWith(handler: Handler, body: Script = Script(List.empty)) extends Statement

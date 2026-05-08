@@ -544,13 +544,16 @@ function love.draw()
       if e.sheet and e.quads and e.currentAnim then
         local anim = clove_findAnim(e.anims, e.currentAnim)
         local frameIdx = anim.frames[e.animFrame]
+        local flipX = anim.flipped and -1 or 1
         local quad = e.quads[frameIdx]
         if quad then
+          local sx = (e.width / e.frameWidth) * flipX
+          local ox = anim.flipped and e.frameWidth or 0
+
           love.graphics.setColor(1, 1, 1, 1)
           love.graphics.push()
           love.graphics.translate(e.x - camera.x, e.y - camera.y)
-          love.graphics.draw(e.sheet, quad, 0, 0, 0,
-            e.width / e.frameWidth, e.height / e.frameHeight)
+          love.graphics.draw(e.sheet, quad, 0, 0, 0, sx, e.height / e.frameHeight, ox, 0)
           love.graphics.pop()
         end
       -- Static sprite

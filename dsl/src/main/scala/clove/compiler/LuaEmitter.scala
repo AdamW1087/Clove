@@ -188,12 +188,12 @@ object LuaEmitter:
            |  entities["$entityId"]["animFrame"] = 1
            |  entities["$entityId"]["animTimer"] = 0""".stripMargin
 
-      case Configure(SpawnConfig.AnimRule(name, frames, fps, condition)) =>
+      case Configure(SpawnConfig.AnimRule(name, frames, fps, condition, flipped)) =>
         val luaFrames = frames.map(_ + 1).mkString(", ")
         val condFn = condition match
           case None       => "function(e) return true end"
           case Some(expr) => s"function(e) return ${emitExpr(expr, inCondition = true)} end"
-        s"""  table.insert(entities["$entityId"]["anims"], {name = "$name", frames = {$luaFrames}, fps = $fps, condition = $condFn})"""
+        s"""  table.insert(entities["$entityId"]["anims"], {name = "$name", frames = {$luaFrames}, fps = $fps, condition = $condFn, flipped = $flipped})"""
 
       case _ => ""
     }.filter(_.nonEmpty).mkString("\n")

@@ -28,7 +28,7 @@ import clove.dsl.given
 
   val lowGravity = handler("Gravity" -> 2.0)
 
-  val waterDrag = handler("Move" -> 0.3 * propagate())
+  val waterDrag = handler("Move" -> 0.3 * propagate(), "drown" -> 10.0)
   val slowMotion = handler("move" -> 0.3)
 
   val waterRegion = handler("Move" -> 0.3, 
@@ -68,12 +68,13 @@ import clove.dsl.given
       setState("temp", 50.0)
       setState("health", 50.0)
 
-      animRule("jumpR", frames = List(5), fps = 1)(!obsState("grounded") && obsState("facingRight"))
-      animRule("walkR", frames = List(1, 2, 3, 4), fps = 8)(keyDown("d"))
-      animRule("idleR", frames = List(0), fps = 1)(obsState("facingRight"))
-      animRule("jumpL", frames = List(11), fps = 1)(!obsState("grounded") && !obsState("facingRight"))
-      animRule("walkL", frames = List(7, 8, 9, 10), fps = 8)(keyDown("a"))
-      animRule("idleL", frames = List(6), fps = 1)(!obsState("facingRight"))
+      animRule("jumpR", frames = List(5), fps = 1, flipped = false)(!obsState("grounded") && obsState("facingRight"))
+      animRule("walkR", frames = List(1, 2, 3, 4), fps = 8, flipped = false)(keyDown("d"))
+      animRule("idleR", frames = List(0), fps = 1, flipped = false)(obsState("facingRight"))
+
+      animRule("jumpL", frames = List(5), fps = 1, flipped = true)(!obsState("grounded") && !obsState("facingRight"))
+      animRule("walkL", frames = List(1, 2, 3, 4), fps = 8, flipped = true)(keyDown("a"))
+      animRule("idleL", frames = List(0), fps = 1, flipped = true)(!obsState("facingRight"))
     }
     .onUpdate {
 

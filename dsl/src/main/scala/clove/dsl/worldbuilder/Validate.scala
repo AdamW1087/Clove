@@ -105,7 +105,7 @@ private def animRuleBeforeSheet(script: Script): Boolean =
     case _ => false
   }
   val firstRuleIdx = statements.indexWhere {
-    case Configure(SpawnConfig.AnimRule(_, _, _, _)) => true
+    case Configure(SpawnConfig.AnimRule(_, _, _, _, _)) => true
     case _ => false
   }
   firstRuleIdx >= 0 && (sheetIdx < 0 || firstRuleIdx < sheetIdx)

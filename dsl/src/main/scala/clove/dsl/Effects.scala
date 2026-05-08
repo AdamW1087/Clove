@@ -181,7 +181,7 @@ def min(exprs: Expr*): Expr = Expr.Min(exprs*)
 
 // TODO: add flip (e.g. animRule(..., flipped = true)) for horizontal flipping
 def animRule(name: String, frames: List[Int], fps: Int)(using b: ScriptBuilder): Unit =
-  b += Configure(SpawnConfig.AnimRule(name, frames, fps, condition = None))
+  b += Configure(SpawnConfig.AnimRule(name, frames, fps, condition = None, false))
 
-def animRule(name: String, frames: List[Int], fps: Int)(cond: Expr)(using b: ScriptBuilder): Unit =
-  b += Configure(SpawnConfig.AnimRule(name, frames, fps, condition = Some(cond)))
+def animRule(name: String, frames: List[Int], fps: Int, flipped: Boolean = false)(cond: Expr)(using b: ScriptBuilder): Unit =
+  b += Configure(SpawnConfig.AnimRule(name, frames, fps, condition = Some(cond), flipped))
