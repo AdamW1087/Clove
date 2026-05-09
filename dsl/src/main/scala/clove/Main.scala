@@ -4,8 +4,8 @@ import clove.compiler.*
 import clove.ast.*
 import clove.dsl.given
 
-@main def run(): Unit =
-
+@main def run(args: String*): Unit =
+  val hotReload = args.contains("--reload")
 
   val Drown = customEffect("Drown") { (value, dt) =>
     script {
@@ -129,5 +129,5 @@ import clove.dsl.given
   }
 
   val outputPath = os.pwd / "output" / "main.lua"
-  LoveRuntime.writeToFile(setup, outputPath)
+  LoveRuntime.writeToFile(setup, outputPath, hotReload)
   println(s"Written to $outputPath")

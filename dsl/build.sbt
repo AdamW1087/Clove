@@ -3,6 +3,7 @@ import scala.sys.process.*
 val scala3Version = "3.8.1"
 
 addCommandAlias("play", "run")
+addCommandAlias("dev", "run --reload")
 
 lazy val root = project
   .in(file("."))
