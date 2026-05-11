@@ -1,51 +1,63 @@
 package clove.compiler
 
-// Static Lua blocks emitted into every generated main.lua.
-// Kept separate from LoveRuntime to keep the Scala emission logic readable.
+
 object LuaRuntime:
 
-  val utilityFunctions: String =
-    """|local function checkCollision(a, b)
-       |  if not a or not b then return false end
-       |  return a.x < b.x + b.width and
-       |         a.x + a.width > b.x and
-       |         a.y < b.y + b.height and
-       |         a.y + a.height > b.y
-       |end
-       |
-       |local function insideRegion(e, r)
-       |  if not e then return false end
-       |  return e.x < r.x + r.w and
-       |         e.x + e.width > r.x and
-       |         e.y < r.y + r.h and
-       |         e.y + e.height > r.y
-       |end
-       |
-       |local function regionActive(region)
-       |  if region.condition == nil then return true end
-       |  return region.condition(globals)
-       |end
-       |
-       |local function clove_findAnim(anims, name)
-       |  for _, a in ipairs(anims) do
-       |    if a.name == name then return a end
-       |  end
-       |  return anims[#anims]
-       |end
-       |
-       |-- Returns effect-scope regions the entity is currently inside (used in resolve)
-       |local function getHandledRegions(e)
-       |  local result = {}
-       |  for _, region in ipairs(regions) do
-       |    if region.type == "basic" and region.hasHandlers and regionActive(region) and insideRegion(e, region) then
-       |      table.insert(result, region)
-       |    end
-       |  end
-       |  return result
-       |end""".stripMargin
+  def utilityFunctions(f: WorldFeatures): String =
+    val checkCollision = if f.usesCollides then
+      """|local function checkCollision(a, b)
+         |  if not a or not b then return false end
+         |  return a.x < b.x + b.width and
+         |         a.x + a.width > b.x and
+         |         a.y < b.y + b.height and
+         |         a.y + a.height > b.y
+         |end
+         |""".stripMargin
+    else ""
 
-  // Walks the handler stack top-down, composing values via propagate().
-  // Returns (resolvedValue, firstImplFound) in a single pass.
+    val findAnim = if f.usesAnimations then
+      """|local function clove_findAnim(anims, name)
+         |  for _, a in ipairs(anims) do
+         |    if a.name == name then return a end
+         |  end
+         |  return anims[#anims]
+         |end
+         |""".stripMargin
+    else ""
+
+    val getHandledRegions = if f.usesHandlers then
+      """|-- Returns effect-scope regions the entity is currently inside (used in resolve)
+         |local function getHandledRegions(e)
+         |  local result = {}
+         |  for _, region in ipairs(regions) do
+         |    if region.type == "basic" and region.hasHandlers and regionActive(region) and insideRegion(e, region) then
+         |      table.insert(result, region)
+         |    end
+         |  end
+         |  return result
+         |end
+         |""".stripMargin
+    else ""
+
+    s"""|$checkCollision
+        |local function insideRegion(e, r)
+        |  if not e then return false end
+        |  return e.x < r.x + r.w and
+        |         e.x + e.width > r.x and
+        |         e.y < r.y + r.h and
+        |         e.y + e.height > r.y
+        |end
+        |
+        |local function regionActive(region)
+        |  if region.condition == nil then return true end
+        |  return region.condition(${if f.usesGlobals then "globals" else "{}"})
+        |end
+        |
+        |$findAnim
+        |$getHandledRegions""".stripMargin
+
+  // Walks the handler stack, composing values via propagate()
+  // Returns (resolvedValue, firstImplFound)
   val resolveFunction: String =
     """|local function resolve(task, entityRegions, key, i, foundImpl)
        |  local taskRegions = entityRegions[task.id] or {}
@@ -70,11 +82,11 @@ object LuaRuntime:
        |      if type(entry) == "table" and entry.propagate then
        |        local rest, restImpl = resolve(task, entityRegions, key, i - 1, foundImpl)
        |        if foundImpl == nil then foundImpl = restImpl end
-       |        
+       |
        |        local neutral = (entry.op == "+" or entry.op == "-") and 0.0 or 1.0
        |        local a = entry.leftVal and entry.value or (rest or neutral)
        |        local b = entry.leftVal and (rest or neutral) or entry.value
-       |        
+       |
        |        if entry.op == "*" then return a * b, foundImpl
        |        elseif entry.op == "+" then return a + b, foundImpl
        |        elseif entry.op == "-" then return a - b, foundImpl
@@ -93,135 +105,170 @@ object LuaRuntime:
        |  return nil, foundImpl
        |end""".stripMargin
 
-  val builtinHandlers: String =
-    """|local function handleGravity(task, entityRegions, dt)
-       |  local resolved, impl = resolve(task, entityRegions, "gravity")
-       |  local e = entities[task.id]
-       |  if not e then return end
-       |
-       |  if impl then impl(task.id, resolved, dt); return end
-       |
-       |  if not resolved then return end
-       |
-       |  e.vy = (e.vy or 0) + resolved * dt
-       |  e.y  = e.y + e.vy
-       |
-       |  -- Solid collision (vertical)
-       |  for _, region in ipairs(regions) do
-       |    if region.type == "solid" and regionActive(region) then
-       |      if insideRegion(e, region) then
-       |        if e.vy >= 0 and not region.oneWay then
-       |          e.y = region.y - e.height; e.vy = 0; e.grounded = true
-       |
-       |        -- One way (only collide if from above)
-       |        elseif e.vy >= 0 and region.oneWay then
-       |          local prevBottom = (e.y - e.vy * dt) + e.height
-       |          if prevBottom <= region.y + 2 then
-       |            e.y = region.y - e.height; e.vy = 0; e.grounded = true
-       |          end
-       |
-       |        -- Hitting ceiling
-       |        elseif e.vy < 0 and not region.oneWay then
-       |          e.y = region.y + region.h; e.vy = 0
-       |        end
-       |      end
-       |    end
-       |  end
-       |
-       |  -- Ground floor
-       |  if e.y + e.height >= GROUND then
-       |    e.y = GROUND - e.height; e.vy = 0; e.grounded = true
-       |
-       |  elseif e.y <= 0 then
-       |    e.y = 0; e.vy = 0
-       |
-       |  -- Not grounded if not on a solid
-       |  else
-       |    local onSolid = false
-       |    for _, region in ipairs(regions) do
-       |      if region.type == "solid" and regionActive(region) then
-       |        if math.abs((e.y + e.height) - region.y) < 2 and
-       |           e.x + e.width > region.x and e.x < region.x + region.w then
-       |          onSolid = true; break
-       |        end
-       |      end
-       |    end
-       |
-       |    if not onSolid then e.grounded = false end
-       |  end
-       |end
-       |
-       |-- Resolves solid region collisions on a single axis after movement
-       |-- axis: "x" or "y", delta: signed movement on that axis
-       |local function resolveSolidCollision(e, axis, delta)
-       |  for _, region in ipairs(regions) do
-       |    if region.type == "solid" and not region.oneWay and regionActive(region) then
-       |      if insideRegion(e, region) then
-       |        if axis == "x" then
-       |          if delta > 0 then e.x = region.x - e.width
-       |          elseif delta < 0 then e.x = region.x + region.w end
-       |        else
-       |          if delta > 0 then e.y = region.y - e.height
-       |          elseif delta < 0 then e.y = region.y + region.h end
-       |        end
-       |      end
-       |    end
-       |  end
-       |end
-       |
-       |local function handleMove(task, entityRegions, a, b, dt)
-       |  local e = entities[task.id]
-       |  if not e then return end
-       |
-       |  local resolved, impl = resolve(task, entityRegions, "move")
-       |
-       |  if impl then impl(task.id, resolved, dt); return end
-       |  local dx = a * dt
-       |  local dy = b * dt
-       |
-       |  if resolved then dx = dx * resolved; dy = dy * resolved end
-       |  e.x = e.x + dx; resolveSolidCollision(e, "x", dx)
-       |  e.y = e.y + dy; resolveSolidCollision(e, "y", dy)
-       |end
-       |
-       |local function handleJump(task, entityRegions, dt)
-       |  local resolved, impl = resolve(task, entityRegions, "jump")
-       |  if impl then impl(task.id, resolved, dt)
-       |  else
-       |    local e = entities[task.id]
-       |    if e and e.grounded then e.vy = -resolved; e.grounded = false end
-       |  end
-       |end
-       |
-       |local function handleSetSize(task, a, b)
+  def builtinHandlers(f: WorldFeatures): String =
+    val gravity = if f.usesGravity then
+      """|local function handleGravity(task, entityRegions, dt)
+         |  local resolved, impl = resolve(task, entityRegions, "gravity")
+         |  local e = entities[task.id]
+         |  if not e then return end
+         |
+         |  if impl then impl(task.id, resolved, dt); return end
+         |
+         |  if not resolved then return end
+         |
+         |  e.vy = (e.vy or 0) + resolved * dt
+         |  e.y  = e.y + e.vy
+         |
+         |  -- Solid collision (vertical)
+         |  for _, region in ipairs(regions) do
+         |    if region.type == "solid" and regionActive(region) then
+         |      if insideRegion(e, region) then
+         |        if e.vy >= 0 and not region.oneWay then
+         |          e.y = region.y - e.height; e.vy = 0; e.grounded = true
+         |        elseif e.vy >= 0 and region.oneWay then
+         |          local prevBottom = (e.y - e.vy * dt) + e.height
+         |          if prevBottom <= region.y + 2 then
+         |            e.y = region.y - e.height; e.vy = 0; e.grounded = true
+         |          end
+         |        elseif e.vy < 0 and not region.oneWay then
+         |          e.y = region.y + region.h; e.vy = 0
+         |        end
+         |      end
+         |    end
+         |  end
+         |
+         |  -- Ground floor
+         |  if e.y + e.height >= GROUND then
+         |    e.y = GROUND - e.height; e.vy = 0; e.grounded = true
+         |  elseif e.y <= 0 then
+         |    e.y = 0; e.vy = 0
+         |  else
+         |    local onSolid = false
+         |    for _, region in ipairs(regions) do
+         |      if region.type == "solid" and regionActive(region) then
+         |        if math.abs((e.y + e.height) - region.y) < 2 and
+         |           e.x + e.width > region.x and e.x < region.x + region.w then
+         |          onSolid = true; break
+         |        end
+         |      end
+         |    end
+         |    if not onSolid then e.grounded = false end
+         |  end
+         |end
+         |""".stripMargin
+    else ""
+
+    val jump = if f.usesJump then
+      """|local function handleJump(task, entityRegions, dt)
+         |  local resolved, impl = resolve(task, entityRegions, "jump")
+         |  if impl then impl(task.id, resolved, dt)
+         |  else
+         |    local e = entities[task.id]
+         |    if e and e.grounded then e.vy = -resolved; e.grounded = false end
+         |  end
+         |end
+         |""".stripMargin
+    else ""
+
+    val move = if f.usesMove then
+      """|-- Resolves solid region collisions on a single axis after movement
+         |-- axis: "x" or "y", delta: signed movement on that axis
+         |local function resolveSolidCollision(e, axis, delta)
+         |  for _, region in ipairs(regions) do
+         |    if region.type == "solid" and not region.oneWay and regionActive(region) then
+         |      if insideRegion(e, region) then
+         |        if axis == "x" then
+         |          if delta > 0 then e.x = region.x - e.width
+         |          elseif delta < 0 then e.x = region.x + region.w end
+         |        else
+         |          if delta > 0 then e.y = region.y - e.height
+         |          elseif delta < 0 then e.y = region.y + region.h end
+         |        end
+         |      end
+         |    end
+         |  end
+         |end
+         |
+         |local function handleMove(task, entityRegions, a, b, dt)
+         |  local e = entities[task.id]
+         |  if not e then return end
+         |
+         |  local resolved, impl = resolve(task, entityRegions, "move")
+         |
+         |  if impl then impl(task.id, resolved, dt); return end
+         |  local dx = a * dt
+         |  local dy = b * dt
+         |
+         |  if resolved then dx = dx * resolved; dy = dy * resolved end
+         |  e.x = e.x + dx; resolveSolidCollision(e, "x", dx)
+         |  e.y = e.y + dy; resolveSolidCollision(e, "y", dy)
+         |end
+         |""".stripMargin
+    else ""
+
+    val collides = if f.usesCollides then
+      """|local function handleCollides(task, targetID)
+         |  local e = entities[task.id]
+         |  local target = entities[targetID]
+         |  if e and target then return checkCollision(e, target) end
+         |  return false
+         |end
+         |""".stripMargin
+    else ""
+
+    val triggers = if f.usesTriggers then
+      """|local function handleTriggers()
+         |  for id, e in pairs(entities) do
+         |    if not prevOverlap[id] then prevOverlap[id] = {} end
+         |    for _, region in ipairs(regions) do
+         |      if region.type == "trigger" and regionActive(region) then
+         |        local rid       = region.id
+         |        local isInside  = insideRegion(e, region)
+         |        local wasInside = prevOverlap[id][rid] or false
+         |        if isInside and not wasInside then region.onEnter(id, globals)
+         |        elseif not isInside and wasInside then region.onExit(id, globals)
+         |        end
+         |        prevOverlap[id][rid] = isInside
+         |      end
+         |    end
+         |  end
+         |end
+         |""".stripMargin
+    else ""
+
+    s"$gravity$jump$move$collides$triggers"
+
+  val setSize: String =
+    """|local function handleSetSize(task, a, b)
        |  local e = entities[task.id]
        |  if e then e.width = a; e.height = b end
-       |end
-       |
-       |local function handleCollides(task, targetID)
-       |  local e = entities[task.id]
-       |  local target = entities[targetID]
-       |  if e and target then return checkCollision(e, target) end
-       |  return false
-       |end
-       |
-       |local function handleTriggers()
-       |  for id, e in pairs(entities) do
-       |    if not prevOverlap[id] then prevOverlap[id] = {} end
-       |    for _, region in ipairs(regions) do
-       |      if region.type == "trigger" and regionActive(region) then
-       |        local rid       = region.id
-       |        local isInside  = insideRegion(e, region)
-       |        local wasInside = prevOverlap[id][rid] or false
-       |
-       |        if isInside and not wasInside then region.onEnter(id, globals)
-       |        elseif not isInside and wasInside then region.onExit(id, globals)
-       |        end
-       |        prevOverlap[id][rid] = isInside
-       |      end
-       |    end
-       |  end
        |end""".stripMargin
+
+  def dispatchTable(f: WorldFeatures): String =
+    val entries = List(
+      if f.usesGravity  then Some("  Gravity  = function(task, er, a, b, dt) handleGravity(task, er, dt) end,") else None,
+      if f.usesJump     then Some("  Jump     = function(task, er, a, b, dt) handleJump(task, er, dt) end,") else None,
+      if f.usesMove     then Some("  Move     = function(task, er, a, b, dt) handleMove(task, er, a, b, dt) end,") else None,
+      Some("  SetSize  = function(task, er, a, b, dt) handleSetSize(task, a, b) end,"),
+      if f.usesCollides then Some("  Collides = function(task, er, a, b, dt) return handleCollides(task, a) end,") else None,
+      Some("""|  SetState = function(task, er, a, b, dt)
+              |    if entities[task.id] then entities[task.id][a] = b end
+              |  end,
+              |  GetState = function(task, er, a, b, dt)
+              |    if entities[task.id] then return entities[task.id][a] end
+              |  end,""".stripMargin),
+      if f.usesGlobals   then Some("""|  SetGlobal = function(task, er, a, b, dt) globals[a] = b end,
+                                      |  GetGlobal  = function(task, er, a, b, dt) return globals[a] end,""".stripMargin) else None,
+      if f.usesCamera    then Some("  Camera    = function(task, er, a, b, dt) camera.follow = task.id end,") else None,
+      if f.usesShowState then Some("""|  ShowState = function(task, er, a, b, dt)
+                                      |    local e = entities[task.id]
+                                      |    if e and e[a] ~= nil then table.insert(uiDrawList, {label = a, value = e[a]}) end
+                                      |  end,""".stripMargin) else None,
+    ).flatten.mkString("\n")
+
+    s"""|local dispatch = {
+        |$entries
+        |}""".stripMargin
 
   val spritesheetLoad: String =
     """|    -- Spritesheet: load image and build quad table
@@ -287,26 +334,3 @@ object LuaRuntime:
        |          love.graphics.draw(e.sheet, quad, 0, 0, 0, sx, e.height / e.frameHeight, ox, 0)
        |          love.graphics.pop()
        |        end""".stripMargin
-
-  // Maps built-in effect names to their handler functions
-  val dispatchTable: String =
-    """|local dispatch = {
-       |  Gravity  = function(task, er, a, b, dt) handleGravity(task, er, dt) end,
-       |  Move     = function(task, er, a, b, dt) handleMove(task, er, a, b, dt) end,
-       |  Jump     = function(task, er, a, b, dt) handleJump(task, er, dt) end,
-       |  SetSize  = function(task, er, a, b, dt) handleSetSize(task, a, b) end,
-       |  Collides = function(task, er, a, b, dt) return handleCollides(task, a) end,
-       |  SetState = function(task, er, a, b, dt)
-       |    if entities[task.id] then entities[task.id][a] = b end
-       |  end,
-       |  GetState = function(task, er, a, b, dt)
-       |    if entities[task.id] then return entities[task.id][a] end
-       |  end,
-       |  SetGlobal = function(task, er, a, b, dt) globals[a] = b end,
-       |  GetGlobal = function(task, er, a, b, dt) return globals[a] end,
-       |  Camera    = function(task, er, a, b, dt) camera.follow = task.id end,
-       |  ShowState = function(task, er, a, b, dt)
-       |    local e = entities[task.id]
-       |    if e and e[a] ~= nil then table.insert(uiDrawList, {label = a, value = e[a]}) end
-       |  end,
-       |}""".stripMargin
