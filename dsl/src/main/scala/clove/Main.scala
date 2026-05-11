@@ -20,7 +20,7 @@ import clove.dsl.given
   }
 
   val physics = handler("Gravity" -> 9.8, "Jump" -> 5.0, "Move" -> 1.0, 
-  "Drown" -> 0.0,
+  "Drown" -> 1.0,
   "Freeze" -> 0.0,
   "isUnderwater" -> false
   )
@@ -28,11 +28,11 @@ import clove.dsl.given
 
   val lowGravity = handler("Gravity" -> 2.0)
 
-  val waterDrag = handler("Move" -> 0.3 * propagate(), "drown" -> 10.0)
+  val waterDrag = handler("Move" -> 0.3 * propagate(), "drown" -> propagate() via {(v, dt) => script {setState("air", max(getState("air") + v * dt, 0.0))}})
   val slowMotion = handler("move" -> 0.3)
 
   val waterRegion = handler("Move" -> 0.3, 
-                            "Drown" -> 50.0, 
+                            "Drown" -> 10.0, 
                             "isUnderwater" -> true,
                             "Jump" -> 5.0 via 
                             { (v, dt) => script { setState("vy", -v) } }
@@ -105,12 +105,12 @@ import clove.dsl.given
       }
 
       showState("health")
-      whenElse(query("isUnderwater")) {
-        perform(Drown)
-        showState("air")
-      } {
-        setState("air", 100.0)
+      when(query("isUnderwater")) {
       }
+      perform(Drown)
+
+      showState("air")
+
     }
 
 

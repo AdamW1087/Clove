@@ -287,3 +287,26 @@ object LuaRuntime:
        |          love.graphics.draw(e.sheet, quad, 0, 0, 0, sx, e.height / e.frameHeight, ox, 0)
        |          love.graphics.pop()
        |        end""".stripMargin
+
+  // Maps built-in effect names to their handler functions
+  val dispatchTable: String =
+    """|local dispatch = {
+       |  Gravity  = function(task, er, a, b, dt) handleGravity(task, er, dt) end,
+       |  Move     = function(task, er, a, b, dt) handleMove(task, er, a, b, dt) end,
+       |  Jump     = function(task, er, a, b, dt) handleJump(task, er, dt) end,
+       |  SetSize  = function(task, er, a, b, dt) handleSetSize(task, a, b) end,
+       |  Collides = function(task, er, a, b, dt) return handleCollides(task, a) end,
+       |  SetState = function(task, er, a, b, dt)
+       |    if entities[task.id] then entities[task.id][a] = b end
+       |  end,
+       |  GetState = function(task, er, a, b, dt)
+       |    if entities[task.id] then return entities[task.id][a] end
+       |  end,
+       |  SetGlobal = function(task, er, a, b, dt) globals[a] = b end,
+       |  GetGlobal = function(task, er, a, b, dt) return globals[a] end,
+       |  Camera    = function(task, er, a, b, dt) camera.follow = task.id end,
+       |  ShowState = function(task, er, a, b, dt)
+       |    local e = entities[task.id]
+       |    if e and e[a] ~= nil then table.insert(uiDrawList, {label = a, value = e[a]}) end
+       |  end,
+       |}""".stripMargin

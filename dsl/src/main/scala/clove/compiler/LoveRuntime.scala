@@ -122,6 +122,8 @@ ${LuaRuntime.resolveFunction}
 
 ${LuaRuntime.builtinHandlers}
 
+${LuaRuntime.dispatchTable}
+
 local effect_impls = {
 $effectImpls
 }
@@ -156,59 +158,30 @@ $hotReloadCheck
     while effect ~= nil do
       local response = nil
 
+      -- Due to stack mutation and a break these cannot be factored out
       if effect == "PushHandler" then
         table.insert(task.handlerStack, a)
-
-      elseif effect == "Gravity" then
-        handleGravity(task, entityRegions, dt)
-
-      elseif effect == "Move" then
-        handleMove(task, entityRegions, a, b, dt)
-
-      elseif effect == "Jump" then
-        handleJump(task, entityRegions, dt)
-
-      elseif effect == "SetSize" then
-        handleSetSize(task, a, b)
 
       elseif effect == "Despawn" then
         entities[task.id] = nil
         task.dead = true
         break
 
-      elseif effect == "Collides" then
-        response = handleCollides(task, a)
-
-      elseif effect == "SetState" then
-        if entities[task.id] then entities[task.id][a] = b end
-
-      elseif effect == "GetState" then
-        if entities[task.id] then response = entities[task.id][a] end
-
-      elseif effect == "SetGlobal" then
-        globals[a] = b
-
-      elseif effect == "GetGlobal" then
-        response = globals[a]
-
-      elseif effect == "Camera" then
-        camera.follow = task.id
-
-      elseif effect == "ShowState" then
-        local e = entities[task.id]
-        if e and e[a] ~= nil then
-          table.insert(uiDrawList, {label = a, value = e[a]})
-        end
-
       else
-        local effect_key = effect:lower()
-        local resolved, handlerImpl = resolve(task, entityRegions, effect_key)
-        if handlerImpl then
-          handlerImpl(task.id, resolved, dt)
+        local builtin = dispatch[effect]
+        if builtin then
+          response = builtin(task, entityRegions, a, b, dt)
         else
-          local impl = effect_impls[effect_key]
-          if impl then impl(task.id, resolved, dt)
-          else response = resolved
+          -- Custom or query effect, check handler impl, then effect_impls, then return resolved value
+          local effect_key = effect:lower()
+          local resolved, handlerImpl = resolve(task, entityRegions, effect_key)
+          if handlerImpl then
+            handlerImpl(task.id, resolved, dt)
+          else
+            local impl = effect_impls[effect_key]
+            if impl then impl(task.id, resolved, dt)
+            else response = resolved
+            end
           end
         end
       end
