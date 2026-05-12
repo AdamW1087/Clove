@@ -1,4 +1,4 @@
-package clove.dsl.worldbuilder
+package clove.dsl
 
 
 import clove.dsl.*
@@ -160,6 +160,15 @@ def validate(builder: WorldBuilder): Unit =
   require(missingSprites.isEmpty,
     s"Sprite files not found: ${missingSprites.mkString(", ")}")
 
+  // Region visual image paths must exist on disk
+  val missingVisuals = builder.regions
+    .flatMap(_.visual)
+    .map(_.path)
+    .distinct
+    .filterNot(path => os.exists(os.pwd / "src" / "main" / "resources" / os.RelPath(path)))
+  require(missingVisuals.isEmpty,
+    s"Region visual image files not found: ${missingVisuals.mkString(", ")}")
+
   // AnimRule must appear after SetSpritesheet
   val animWithoutSheet = builder.entities.filter(e => animRuleBeforeSheet(e.spawnScript)).map(_.name)
   require(animWithoutSheet.isEmpty,
@@ -177,7 +186,7 @@ def validate(builder: WorldBuilder): Unit =
 
   // Trigger scripts may only use a restricted set of effects
   val illegalTriggerEffects = builder.regions.flatMap {
-    case Region(id, _, _, _, _, Behaviour.Trigger(onEnter, onExit), _, _) =>
+    case Region(id, _, _, _, _, Behaviour.Trigger(onEnter, onExit), _, _, _) =>
       val bad = collectIllegalTriggerEffects(onEnter) ++ collectIllegalTriggerEffects(onExit)
       bad.map(e => s"${id.getOrElse("unnamed trigger")}: $e")
     case _ => Nil
@@ -188,7 +197,7 @@ def validate(builder: WorldBuilder): Unit =
   // obsGlobal keys must be declared in the world globals
   val globalKeys = builder.globals.keySet
   val missingGlobals = builder.regions.flatMap {
-    case Region(_, _, _, _, _, _, Some(cond), _) => collectObsGlobals(cond)
+    case Region(_, _, _, _, _, _, Some(cond), _, _) => collectObsGlobals(cond)
     case _ => Nil
   }.filterNot(globalKeys.contains)
   require(missingGlobals.isEmpty,
@@ -231,7 +240,7 @@ def validate(builder: WorldBuilder): Unit =
   val allHandlerKeys = (
     builder.defaultHandlers ++
     builder.regions.flatMap {
-      case Region(_, _, _, _, _, Behaviour.Basic(handlers), _, _) => handlers
+      case Region(_, _, _, _, _, Behaviour.Basic(handlers), _, _, _) => handlers
       case _ => Nil
     } ++
     builder.entities.flatMap(e => collectHandlers(e.updateScript) ++ collectHandlers(e.spawnScript))

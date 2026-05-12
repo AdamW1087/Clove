@@ -1,5 +1,5 @@
 package clove.dsl
-import clove.dsl.worldbuilder.WorldBuilder
+import clove.dsl.WorldBuilder
 
 import clove.ast.*
 
@@ -98,28 +98,31 @@ def spawn(entity: Entity)(using b: WorldBuilder): Unit =
 // TODO: Fix overloaded defaults (allowing for id and non id)
 def region(id: String, x: Double, y: Double, w: Double, h: Double,
            colour: Option[(Double, Double, Double)] = None,
-           condition: Option[Expr] = None)
+           condition: Option[Expr] = None,
+           visual: Option[Visual] = None)
           (handlers: Handler*)
           (using b: WorldBuilder): Unit =
-  b.addRegion(Region(Some(id), x, y, w, h, Behaviour.Basic(handlers.toList), condition, colour))
+  b.addRegion(Region(Some(id), x, y, w, h, Behaviour.Basic(handlers.toList), condition, colour, visual))
 
 def platform(id: String, x: Double, y: Double, w: Double, h: Double,
              colour: Option[(Double, Double, Double)] = None,
              oneWay: Boolean = false,
-             condition: Option[Expr] = None)
+             condition: Option[Expr] = None,
+             visual: Option[Visual] = None)
             (using b: WorldBuilder): Unit =
-  b.addRegion(Region(Some(id), x, y, w, h, Behaviour.Solid(oneWay), condition, colour))
+  b.addRegion(Region(Some(id), x, y, w, h, Behaviour.Solid(oneWay), condition, colour, visual))
 
 // TODO: maybe remove — can be mimicked from handler values, but still needed for one-shot code
 // Could use "hasBeenUnderwater" etc
 def triggerable(id: String, x: Double, y: Double, w: Double, h: Double,
                 colour: Option[(Double, Double, Double)] = None,
                 condition: Option[Expr] = None,
+                visual: Option[Visual] = None,
                 onEnter: ScriptBuilder ?=> Unit = (_: ScriptBuilder) ?=> (),
                 onExit:  ScriptBuilder ?=> Unit = (_: ScriptBuilder) ?=> ())
                (using b: WorldBuilder): Unit =
   b.addRegion(Region(Some(id), x, y, w, h,
-    Behaviour.Trigger(script(onEnter), script(onExit)), condition, colour))
+    Behaviour.Trigger(script(onEnter), script(onExit)), condition, colour, visual))
 
 // Camera
 // TODO: stack camera (sometimes pressing to swap in doesnt get registered as it is dependant on which task is ran last)
@@ -180,8 +183,8 @@ def max(exprs: Expr*): Expr = Expr.Max(exprs*)
 def min(exprs: Expr*): Expr = Expr.Min(exprs*)
 
 // TODO: add flip (e.g. animRule(..., flipped = true)) for horizontal flipping
-def animRule(name: String, frames: List[Int], fps: Int)(using b: ScriptBuilder): Unit =
-  b += Configure(SpawnConfig.AnimRule(name, frames, fps, condition = None, false))
+def animRule(name: String, frames: List[Int], fps: Int, flipped: Boolean)(using b: ScriptBuilder): Unit =
+  b += Configure(SpawnConfig.AnimRule(name, frames, fps, condition = None, flipped))
 
 def animRule(name: String, frames: List[Int], fps: Int, flipped: Boolean = false)(cond: Expr)(using b: ScriptBuilder): Unit =
   b += Configure(SpawnConfig.AnimRule(name, frames, fps, condition = Some(cond), flipped))

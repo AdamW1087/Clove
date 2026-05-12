@@ -23,6 +23,7 @@ case class Region(
   id: Option[String],
   x: Double, y: Double, w: Double, h: Double,
   behaviour: Behaviour,
-  condition: Option[Expr] = None, // Condition for region to be active
-  colour: Option[(Double, Double, Double)] = None // Colour of region TODO sprites
+  condition: Option[Expr] = None,
+  colour: Option[(Double, Double, Double)] = None,
+  visual: Option[Visual] = None
 )

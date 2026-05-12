@@ -1,4 +1,4 @@
-package clove.dsl.worldbuilder
+package clove.dsl
 
 import clove.ast.*
 import clove.dsl.*

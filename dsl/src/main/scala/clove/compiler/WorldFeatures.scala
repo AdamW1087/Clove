@@ -11,5 +11,6 @@ case class WorldFeatures(
   usesGlobals:    Boolean,
   usesTriggers:   Boolean,
   usesAnimations: Boolean,
-  usesHandlers:   Boolean
+  usesHandlers:   Boolean,
+  usesVisuals:    Boolean
 )

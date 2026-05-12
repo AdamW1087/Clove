@@ -334,3 +334,40 @@ object LuaRuntime:
        |          love.graphics.draw(e.sheet, quad, 0, 0, 0, sx, e.height / e.frameHeight, ox, 0)
        |          love.graphics.pop()
        |        end""".stripMargin
+
+
+  val visualDrawFn: String =
+    """|local function drawRegionVisual(region)
+       |  local img = images[region.visualImage]
+       |  if not img then return end
+       |  local imgW = img:getWidth()
+       |  local imgH = img:getHeight()
+       |
+       |  if region.visualMode == "stretch" then
+       |    love.graphics.draw(img, region.x - camera.x, region.y - camera.y, 0,
+       |      region.w / imgW, region.h / imgH)
+       |
+       |  elseif region.visualMode == "tile" then
+       |    local tileW = region.visualTileSize and region.visualTileSize.w or imgW
+       |    local tileH = region.visualTileSize and region.visualTileSize.h or imgH
+       |    local scaleX = tileW / imgW
+       |    local scaleY = tileH / imgH
+       |    local cols = math.ceil(region.w / tileW)
+       |    local rows = math.ceil(region.h / tileH)
+       |    love.graphics.setScissor(
+       |      region.x - camera.x, region.y - camera.y,
+       |      region.w, region.h)
+       |    for row = 0, rows - 1 do
+       |      for col = 0, cols - 1 do
+       |        love.graphics.draw(img,
+       |          region.x - camera.x + col * tileW,
+       |          region.y - camera.y + row * tileH,
+       |          0, scaleX, scaleY)
+       |      end
+       |    end
+       |    love.graphics.setScissor()
+       |
+       |  elseif region.visualMode == "sprite" then
+       |    love.graphics.draw(img, region.x - camera.x, region.y - camera.y)
+       |  end
+       |end""".stripMargin

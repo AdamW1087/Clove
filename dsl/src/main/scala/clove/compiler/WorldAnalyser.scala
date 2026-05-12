@@ -1,8 +1,7 @@
 package clove.compiler
 
 import clove.ast.*
-import clove.dsl.{Region, Behaviour}
-import clove.dsl.worldbuilder.World
+import clove.dsl.{Region, Behaviour, World}
 
 object WorldAnalyser:
 
@@ -11,7 +10,7 @@ object WorldAnalyser:
     // Collect every script in the world for effect scanning
     val entityScripts = world.entities.flatMap(e => List(e.spawnScript, e.updateScript))
     val triggerScripts = world.regions.flatMap {
-      case Region(_, _, _, _, _, Behaviour.Trigger(onEnter, onExit), _, _) => List(onEnter, onExit)
+      case Region(id, _, _, _, _, Behaviour.Trigger(onEnter, onExit), _, _, _) => List(onEnter, onExit)
       case _ => Nil
     }
     val customEffectScripts = world.customEffects.map { e =>
@@ -45,11 +44,12 @@ object WorldAnalyser:
 
     def uses(p: Effect => Boolean): Boolean = allEffects.exists(p)
 
+    // usesHandlers: true if any handleWith in entity scripts OR any Basic region has handlers
     val hasHandleWithInScripts = world.entities.exists { e =>
       hasHandleWith(e.updateScript) || hasHandleWith(e.spawnScript)
     }
     val hasBasicRegionHandlers = world.regions.exists {
-      case Region(_, _, _, _, _, Behaviour.Basic(handlers), _, _) =>
+      case Region(_, _, _, _, _, Behaviour.Basic(handlers), _, _, _) =>
         handlers.exists(h => h.handles.nonEmpty || h.impls.nonEmpty)
       case _ => false
     }
@@ -63,12 +63,13 @@ object WorldAnalyser:
       usesShowState  = uses { case _: Effect.ShowState => true; case _ => false },
       usesGlobals    = world.initialGlobals.nonEmpty ||
                        uses { case _: Effect.GetGlobal => true; case _: Effect.SetGlobal => true; case _ => false },
-      usesTriggers   = world.regions.exists { case Region(_, _, _, _, _, _: Behaviour.Trigger, _, _) => true; case _ => false },
+      usesTriggers   = world.regions.exists { case Region(_, _, _, _, _, _: Behaviour.Trigger, _, _, _) => true; case _ => false },
       usesAnimations = world.entities.exists(e =>
         e.spawnScript.statements.exists {
           case Configure(SpawnConfig.SetSpritesheet(_, _, _)) => true
           case _ => false
         }
       ),
-      usesHandlers   = hasHandleWithInScripts || hasBasicRegionHandlers
+      usesHandlers = hasHandleWithInScripts || hasBasicRegionHandlers,
+      usesVisuals = world.regions.exists(_.visual.isDefined)
     )

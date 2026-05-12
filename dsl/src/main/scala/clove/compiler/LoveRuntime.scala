@@ -1,8 +1,7 @@
 package clove.compiler
 
 import clove.ast.*
-import clove.dsl.{Region, Behaviour}
-import clove.dsl.worldbuilder.World
+import clove.dsl.{Region, Behaviour, Visual, VisualMode, World}
 
 object LoveRuntime:
 
@@ -10,6 +9,11 @@ object LoveRuntime:
 
   def wrap(world: World, hotReload: Boolean = false): String =
     val features = WorldAnalyser.analyse(world)
+
+    val visualImagePaths = world.regions
+      .flatMap(_.visual)
+      .map(_.path)
+      .distinct
 
     // Emission helpers
     val regionTable = world.regions.zipWithIndex.map { (r, idx) =>
@@ -21,10 +25,22 @@ object LoveRuntime:
 
       val (cr, cg, cb) = r.colour.getOrElse((1.0, 1.0, 1.0))
 
+      val visualFields = r.visual match
+        case None => "hasVisual = false"
+        case Some(Visual(path, mode, tileSize)) =>
+          val modeStr = mode match
+            case VisualMode.Stretch => "\"stretch\""
+            case VisualMode.Tile    => "\"tile\""
+            case VisualMode.Sprite  => "\"sprite\""
+          val tileSizeStr = tileSize match
+            case None         => "nil"
+            case Some((w, h)) => s"{w = $w, h = $h}"
+          s"hasVisual = true, visualImage = \"$path\", visualMode = $modeStr, visualTileSize = $tileSizeStr"
+
       // Common fields shared across all region types
       val commonFields =
         s"id = $idStr, x = ${r.x}, y = ${r.y}, w = ${r.w}, h = ${r.h}, " +
-        s"hasColor = ${r.colour.isDefined}, r = $cr, g = $cg, b = $cb, condition = $condStr"
+        s"hasColor = ${r.colour.isDefined}, r = $cr, g = $cg, b = $cb, condition = $condStr, $visualFields"
 
       r.behaviour match
         case Behaviour.Basic(handlers) =>
@@ -81,6 +97,13 @@ object LoveRuntime:
       .map { e => s"""  table.insert(tasks, {id = "${e.name}", co = ${e.name}Script, handlerStack = {}})""" }
       .mkString("\n")
 
+    val visualCacheLoad = if features.usesVisuals then
+      val cacheEntries = visualImagePaths.map { path =>
+        s"  images[\"$path\"] = love.graphics.newImage(\"$path\")"
+      }.mkString("\n")
+      s"  -- Deduplicated region visual image cache\n$cacheEntries"
+    else ""
+
     val hotReloadBlock = if hotReload then
       """|local _lastModified = love.filesystem.getInfo("main.lua") and love.filesystem.getInfo("main.lua").modtime or 0
          |""".stripMargin
@@ -115,6 +138,7 @@ $regionTable
 
 ${if features.usesShowState then "local uiDrawList = {}" else ""}
 ${if features.usesTriggers  then "local prevOverlap = {}" else ""}
+${if features.usesVisuals   then "local images = {}" else ""}
 
 ${LuaRuntime.utilityFunctions(features)}
 
@@ -125,6 +149,8 @@ ${LuaRuntime.builtinHandlers(features)}
 ${LuaRuntime.setSize}
 
 ${LuaRuntime.dispatchTable(features)}
+
+${if features.usesVisuals then LuaRuntime.visualDrawFn else ""}
 
 local effect_impls = {
 $effectImpls
@@ -143,6 +169,8 @@ $taskSetup
     end
 ${if features.usesAnimations then LuaRuntime.spritesheetLoad else ""}
   end
+
+$visualCacheLoad
 end
 
 function love.update(dt)
@@ -215,9 +243,17 @@ end
 
 function love.draw()
   for _, region in ipairs(regions) do
-    if region.hasColor and regionActive(region) then
-      love.graphics.setColor(region.r, region.g, region.b, 1)
-      love.graphics.rectangle("fill", region.x - $cx, region.y - $cy, region.w, region.h)
+    if regionActive(region) then
+      if region.hasColor then
+        love.graphics.setColor(region.r, region.g, region.b, 1)
+        love.graphics.rectangle("fill", region.x - $cx, region.y - $cy, region.w, region.h)
+      end
+${if features.usesVisuals then
+    """|      if region.hasVisual then
+       |        if not region.hasColor then love.graphics.setColor(1, 1, 1, 1) end
+       |        drawRegionVisual(region)
+       |      end""".stripMargin
+  else ""}
       love.graphics.setColor(1, 1, 1, 1)
     end
   end
