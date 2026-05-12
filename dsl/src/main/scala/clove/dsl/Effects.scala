@@ -173,6 +173,19 @@ def setSprite(path: String)(using b: ScriptBuilder): Unit =
 def setSpritesheet(path: String, frameWidth: Int, frameHeight: Int)(using b: ScriptBuilder): Unit =
   b += Configure(SpawnConfig.SetSpritesheet(path, frameWidth, frameHeight))
 
+// Visual helpers
+def stretch(path: String): Visual =
+  Visual(path, VisualMode.Stretch)
+
+def tile(path: String, size: Double = 32): Visual =
+  Visual(path, VisualMode.Tile, Some((size, size)))
+
+def tile(path: String, width: Double, height: Double): Visual =
+  Visual(path, VisualMode.Tile, Some((width, height)))
+
+def sprite(path: String): Visual =
+  Visual(path, VisualMode.Sprite)
+
 // Observe entity state directly — only valid inside animRule conditions
 def obsState(key: String): Expr = Expr.StateRead(key)
 
