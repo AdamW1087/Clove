@@ -186,6 +186,8 @@ def tile(path: String, width: Double, height: Double): Visual =
 def sprite(path: String): Visual =
   Visual(path, VisualMode.Sprite)
 
+given Conversion[Visual, Option[Visual]] = Some(_)
+
 // Observe entity state directly — only valid inside animRule conditions
 def obsState(key: String): Expr = Expr.StateRead(key)
 

@@ -90,20 +90,20 @@ import clove.dsl.given
 
   val setup = world {
     region("sky", 0, 0, 3200, 600,
-      visual = Some(tile("assets/sky.png", 32))) ()
+      visual = tile("assets/sky.png", 32)) ()
 
     platform("ground", 0, 550, 3200, 50,
-      visual = Some(tile("assets/ground.png", 32)))
+      visual = tile("assets/ground.png", 32))
 
     platform("bricks1", 200, 380, 160, 32,
-      visual = Some(tile("assets/brick.png", 32)))
+      visual = tile("assets/brick.png", 32))
 
     platform("bricks2", 500, 300, 128, 32,
-      visual = Some(tile("assets/brick.png", 32)))
+      visual = tile("assets/brick.png", 32))
 
     region("water", 600, 200, 200, 350,
       colour = Some((0.0, 0.4, 1.0)),
-      visual = Some(tile("assets/water.png", 32))) (waterRegion)
+      visual = tile("assets/water.png", 32)) (waterRegion)
 
     spawn(player)
     spawn(item)
