@@ -19,6 +19,8 @@ enum Effect:
   case SetGlobal(key: String, value: Expr)
   case GetGlobal(key: String)
   case SetSize(width: Expr, height: Expr)
+  case SetStateOf(targetId: String, key: String, value: Expr)
+  case GetStateOf(targetId: String, key: String)
 
   // Others (not sure if classing as 'Effect' is proper
   case Draw()

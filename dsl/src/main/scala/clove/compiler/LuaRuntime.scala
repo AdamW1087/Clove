@@ -258,7 +258,7 @@ object LuaRuntime:
               |    if entities[task.id] then return entities[task.id][a] end
               |  end,""".stripMargin),
       if f.usesGlobals   then Some("""|  SetGlobal = function(task, er, a, b, dt) globals[a] = b end,
-                                      |  GetGlobal  = function(task, er, a, b, dt) return globals[a] end,""".stripMargin) else None,
+                                      |  GetGlobal = function(task, er, a, b, dt) return globals[a] end,""".stripMargin) else None,
       if f.usesCamera    then Some("  Camera    = function(task, er, a, b, dt) camera.follow = task.id end,") else None,
       if f.usesShowState then Some("""|  ShowState = function(task, er, a, b, dt)
                                       |    local e = entities[task.id]

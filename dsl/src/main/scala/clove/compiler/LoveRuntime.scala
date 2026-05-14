@@ -185,7 +185,7 @@ ${if features.usesHandlers then
 
   for _, task in ipairs(tasks) do
     task.handlerStack = {}
-    local ok, effect, a, b = coroutine.resume(task.co)
+    local ok, effect, a, b, c = coroutine.resume(task.co)
 
     while effect ~= nil do
       local response = nil
@@ -197,6 +197,12 @@ ${if features.usesHandlers then
         entities[task.id] = nil
         task.dead = true
         break
+
+      elseif effect == "SetStateOf" then
+        if entities[a] then entities[a][b] = c end
+
+      elseif effect == "GetStateOf" then
+        response = entities[a] and entities[a][b] or nil
 
       else
         local builtin = dispatch[effect]
@@ -217,7 +223,7 @@ ${if features.usesHandlers then
         end
       end
 
-      ok, effect, a, b = coroutine.resume(task.co, response)
+      ok, effect, a, b, c = coroutine.resume(task.co, response)
       if not ok then
         print("Script error in " .. task.id .. ": " .. tostring(effect))
         break

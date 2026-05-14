@@ -41,6 +41,12 @@ def setGlobal(key: String, value: Expr)(using b: ScriptBuilder): Unit =
 def getGlobal(key: String)(using b: ScriptBuilder): Expr =
   bind(Effect.GetGlobal(key))
 
+def setStateOf(targetId: String, key: String, value: Expr)(using b: ScriptBuilder): Unit =
+  perform(Effect.SetStateOf(targetId, key, value))
+
+def getStateOf(targetId: String, key: String)(using b: ScriptBuilder): Expr =
+  bind(Effect.GetStateOf(targetId, key))
+
 // Define a global variable in world block
 def global(key: String, value: Expr)(using b: WorldBuilder): Unit =
   b.setGlobal(key, value)
@@ -193,6 +199,26 @@ def obsState(key: String): Expr = Expr.StateRead(key)
 
 // Observe global state — valid in region conditions and animRule conditions
 def obsGlobal(key: String): Expr = Expr.GlobalRead(key)
+
+
+def obsStateOf(id: String, key: String): Expr = Expr.EntityRead(id, key)
+
+def exists(id: String): Expr = Expr.EntityExists(id)
+
+def switchState(stateKey: String, states: (String, ScriptBuilder ?=> Unit)*)(using b: ScriptBuilder): Unit =
+  if states.isEmpty then return
+  val current = getState(stateKey)
+  def buildChain(remaining: Seq[(String, ScriptBuilder ?=> Unit)]): Unit =
+    remaining match
+      case Seq((_, behaviour)) =>
+        behaviour
+      case (name, behaviour) +: tail =>
+        whenElse(current === name) {
+          behaviour
+        } {
+          buildChain(tail)
+        }
+  buildChain(states)
 
 def max(exprs: Expr*): Expr = Expr.Max(exprs*)
 def min(exprs: Expr*): Expr = Expr.Min(exprs*)

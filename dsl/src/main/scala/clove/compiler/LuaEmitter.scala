@@ -25,6 +25,12 @@ object LuaEmitter:
       if inCondition then s"globals[\"$key\"]"
       else s"-- obsGlobal(\"$key\") used outside condition"
 
+    case Expr.EntityRead(id, key) =>
+      s"(entities[\"$id\"] and entities[\"$id\"][\"$key\"] or 0.0)"
+
+    case Expr.EntityExists(id) =>
+      s"(entities[\"$id\"] ~= nil)"
+
     case Expr.Propagate =>
       s"{value = 1.0, propagate = true, op = \"*\"}"
 
@@ -91,21 +97,23 @@ object LuaEmitter:
         ""
 
   def emitYield(effect: Effect): String = effect match
-    case Effect.Move(dx, dy)      => s"coroutine.yield(\"Move\", ${emitExpr(dx)}, ${emitExpr(dy)})"
-    case Effect.Jump()            => s"coroutine.yield(\"Jump\")"
-    case Effect.Gravity()         => s"coroutine.yield(\"Gravity\")"
-    case Effect.Despawn()         => s"coroutine.yield(\"Despawn\")"
-    case Effect.Draw()            => s"coroutine.yield(\"Draw\")"
-    case Effect.SetState(key, v)  => s"coroutine.yield(\"SetState\", \"$key\", ${emitExpr(v)})"
-    case Effect.GetState(key)     => s"coroutine.yield(\"GetState\", \"$key\")"
-    case Effect.SetGlobal(key, v) => s"coroutine.yield(\"SetGlobal\", \"$key\", ${emitExpr(v)})"
-    case Effect.GetGlobal(key)    => s"coroutine.yield(\"GetGlobal\", \"$key\")"
-    case Effect.Collides(target)  => s"coroutine.yield(\"Collides\", ${emitExprAsString(target)})"
-    case Effect.Camera()          => s"coroutine.yield(\"Camera\")"
-    case Effect.Custom(name, _)   => s"coroutine.yield(\"$name\")"
-    case Effect.Query(name)       => s"coroutine.yield(\"$name\")"
-    case Effect.ShowState(key)    => s"coroutine.yield(\"ShowState\", \"$key\")"
-    case Effect.SetSize(w, h)     => s"coroutine.yield(\"SetSize\", ${emitExpr(w)}, ${emitExpr(h)})"
+    case Effect.Move(dx, dy)                 => s"coroutine.yield(\"Move\", ${emitExpr(dx)}, ${emitExpr(dy)})"
+    case Effect.Jump()                       => s"coroutine.yield(\"Jump\")"
+    case Effect.Gravity()                    => s"coroutine.yield(\"Gravity\")"
+    case Effect.Despawn()                    => s"coroutine.yield(\"Despawn\")"
+    case Effect.Draw()                       => s"coroutine.yield(\"Draw\")"
+    case Effect.SetState(key, v)             => s"coroutine.yield(\"SetState\", \"$key\", ${emitExpr(v)})"
+    case Effect.GetState(key)                => s"coroutine.yield(\"GetState\", \"$key\")"
+    case Effect.SetGlobal(key, v)            => s"coroutine.yield(\"SetGlobal\", \"$key\", ${emitExpr(v)})"
+    case Effect.GetGlobal(key)               => s"coroutine.yield(\"GetGlobal\", \"$key\")"
+    case Effect.SetStateOf(targetId, key, v) => s"coroutine.yield(\"SetStateOf\", \"$targetId\", \"$key\", ${emitExpr(v)})"
+    case Effect.GetStateOf(targetId, key)    => s"coroutine.yield(\"GetStateOf\", \"$targetId\", \"$key\")"
+    case Effect.Collides(target)             => s"coroutine.yield(\"Collides\", ${emitExprAsString(target)})"
+    case Effect.Camera()                     => s"coroutine.yield(\"Camera\")"
+    case Effect.Custom(name, _)              => s"coroutine.yield(\"$name\")"
+    case Effect.Query(name)                  => s"coroutine.yield(\"$name\")"
+    case Effect.ShowState(key)               => s"coroutine.yield(\"ShowState\", \"$key\")"
+    case Effect.SetSize(w, h)                => s"coroutine.yield(\"SetSize\", ${emitExpr(w)}, ${emitExpr(h)})"
 
   def emitScript(script: Script, indent: Int = 0): String =
     script.statements

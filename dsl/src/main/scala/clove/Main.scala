@@ -6,6 +6,41 @@ import clove.dsl.given
 @main def run(args: String*): Unit =
   val hotReload = args.contains("--reload")
 
+  def patrolEnemy(name: String, spawnX: Double, spawnY: Double,
+                  speed: Double = 150.0,
+                  turnRange: Double = 200.0): Entity =
+    entity(name)
+      .onSpawn {
+        setState("x", spawnX)
+        setState("y", spawnY)
+        setState("direction", 1.0)
+        setState("startX", spawnX)
+        setSize(32.0, 32.0)
+      }
+      .onUpdate {
+        perform(Effect.Gravity())
+
+        val dir    = getState("direction")
+        val x      = getState("x")
+        val startX = getState("startX")
+
+        when(turnRange > 0.0) {
+          when((x - startX) > turnRange) { setState("direction", -1.0) }
+          when((startX - x) > turnRange) { setState("direction",  1.0) }
+        }
+
+        whenElse(dir === 1.0) {
+          move(speed, 0.0)
+        } {
+          move(-speed, 0.0)
+        }
+
+        when(collides(Expr.Var("player"))) {
+          despawn()
+        }
+      }
+
+
   val Drown = customEffect("Drown") { (value, dt) =>
     script {
       setState("air", max(getState("air") - value * dt, 0.0))
@@ -29,17 +64,68 @@ import clove.dsl.given
   )
 
   val speedBoost = handler("Move" -> 2.0 * propagate())
-  val slowMotion = handler("Move" -> 0.3 * propagate())
+
+
+  val goomba  = patrolEnemy("goomba",  spawnX = 400.0, spawnY = 0.0, speed = 120.0, turnRange = 150.0)
+  val goomba2 = patrolEnemy("goomba2", spawnX = 700.0, spawnY = 0.0, speed = 100.0, turnRange = 100.0)
+
+
+  def patrol(speed: Double = 150.0, range: Double = 150.0): ScriptBuilder ?=> Unit = {
+    val x      = getState("x")
+    val startX = getState("startX")
+    when((x - startX) > range) { setState("direction", -1.0) }
+    when((startX - x) > range) { setState("direction",  1.0) }
+    whenElse(getState("direction") === 1.0) {
+      move(speed, 0.0)
+    } {
+      move(-speed, 0.0)
+    }
+  }
+
+  def chasePlayer(speed: Double = 250.0, chaseRange: Double = 200.0, leashRange: Double = 300.0): ScriptBuilder ?=> Unit = {
+    when(exists("player")) {
+      whenElse(getStateOf("player", "x") > getState("x")) {
+        move(speed, 0.0)
+      } {
+        move(-speed, 0.0)
+      }
+      when(collides(Expr.Var("player"))) {
+        setStateOf("player", "health", getStateOf("player", "health") - 10.0)
+      }
+      val dx = getStateOf("player", "x") - getState("x")
+      when((dx * dx) > (leashRange * leashRange)) {
+        setState("mode", "patrol")
+      }
+    }
+    when(!exists("player")) { setState("mode", "patrol") }
+  }
+
+  def switchToChaseWhenClose(range: Double = 200.0): ScriptBuilder ?=> Unit = {
+    when(exists("player")) {
+      val dx = getStateOf("player", "x") - getState("x")
+      when((dx * dx) < (range * range)) {
+        setState("mode", "chase")
+      }
+    }
+  }
 
 
   val item = entity("item")
     .onSpawn {
-      setState("x", 600.0)
+      setState("x", 300.0)
       setState("y", 0.0)
+      setState("direction", 1.0)
+      setState("startX", 300.0)
+      setState("mode", "patrol")
       setSize(32.0, 32.0)
     }
     .onUpdate {
       perform(Effect.Gravity())
+
+      switchState("mode",
+        "patrol" -> { patrol(); switchToChaseWhenClose() },
+        "chase"  -> chasePlayer()
+      )
     }
 
   val player = entity("player")
@@ -85,6 +171,10 @@ import clove.dsl.given
       } {
         setState("air", 100.0)
       }
+
+      when(getState("health") <= 0.0) {
+        despawn()
+      }
     }
 
 
@@ -107,6 +197,8 @@ import clove.dsl.given
 
     spawn(player)
     spawn(item)
+    spawn(goomba)
+    spawn(goomba2)
 
     handle(physics)
     register(Drown)

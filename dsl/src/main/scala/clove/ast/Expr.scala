@@ -22,6 +22,10 @@ enum Expr:
   case StateRead(key: String)
   case GlobalRead(key: String)
 
+  // Cross entity direct reads
+  case EntityRead(id: String, key: String)
+  case EntityExists(id: String)
+
 object Expr:
   given Conversion[Double, Expr] = Expr.Num(_)
   given Conversion[Int, Expr] = i => Expr.Num(i.toDouble)

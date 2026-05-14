@@ -10,7 +10,7 @@ object WorldAnalyser:
     // Collect every script in the world for effect scanning
     val entityScripts = world.entities.flatMap(e => List(e.spawnScript, e.updateScript))
     val triggerScripts = world.regions.flatMap {
-      case Region(id, _, _, _, _, Behaviour.Trigger(onEnter, onExit), _, _, _) => List(onEnter, onExit)
+      case Region(_, _, _, _, _, Behaviour.Trigger(onEnter, onExit), _, _, _) => List(onEnter, onExit)
       case _ => Nil
     }
     val customEffectScripts = world.customEffects.map { e =>
@@ -44,7 +44,26 @@ object WorldAnalyser:
 
     def uses(p: Effect => Boolean): Boolean = allEffects.exists(p)
 
-    // usesHandlers: true if any handleWith in entity scripts OR any Basic region has handlers
+    def scanExpr(expr: Expr): Boolean = expr match
+      case Expr.EntityRead(_, _) => true
+      case Expr.EntityExists(_)  => true
+      case Expr.BinOp(_, l, r)   => scanExpr(l) || scanExpr(r)
+      case Expr.Not(e)           => scanExpr(e)
+      case _                     => false
+
+    def scanScript(script: Script): Boolean =
+      script.statements.exists {
+        case If(cond, t)         => scanExpr(cond) || scanScript(t)
+        case IfElse(cond, t, el) => scanExpr(cond) || scanScript(t) || scanScript(el)
+        case Loop(body)          => scanScript(body)
+        case HandleWith(_, body) => scanScript(body)
+        case _                   => false
+      }
+
+    val usesEntityReadsVal = world.entities.exists(e =>
+      scanScript(e.updateScript) || scanScript(e.spawnScript)
+    )
+
     val hasHandleWithInScripts = world.entities.exists { e =>
       hasHandleWith(e.updateScript) || hasHandleWith(e.spawnScript)
     }
@@ -71,5 +90,8 @@ object WorldAnalyser:
         }
       ),
       usesHandlers = hasHandleWithInScripts || hasBasicRegionHandlers,
-      usesVisuals = world.regions.exists(_.visual.isDefined)
+      usesVisuals = world.regions.exists(_.visual.isDefined),
+      usesEntityReads = usesEntityReadsVal,
+      usesCrossEntityReads  = uses { case _: Effect.GetStateOf => true; case _ => false },
+      usesCrossEntityWrites = uses { case _: Effect.SetStateOf => true; case _ => false }
     )
