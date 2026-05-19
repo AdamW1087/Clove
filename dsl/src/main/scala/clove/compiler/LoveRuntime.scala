@@ -92,13 +92,19 @@ object LoveRuntime:
         s"""  ["${e.name}"] = function(id)\n${LuaEmitter.emitSpawnScript(e.name, e.spawnScript).replace(s""""${e.name}"""", "id")}\n  end"""
       }.mkString(",\n")
 
+      val inits = world.templates.values
+        .filter(_.initScript.statements.nonEmpty)
+        .map { e =>
+          s"""  ["${e.name}"] = function(id) return ${LuaEmitter.emitInitCoroutine(e.name, e.initScript).replace(s""""${e.name}"""", "id")} end"""
+        }.mkString(",\n")
+
       val scripts = world.templates.values
         .filter(_.updateScript.statements.nonEmpty)
         .map { e =>
           s"""  ["${e.name}"] = function(id) return ${LuaEmitter.emitCoroutine(e.name, e.updateScript).replace(s""""${e.name}"""", "id")} end"""
         }.mkString(",\n")
 
-      s"local templateDefs = {\n$defs\n}\nlocal templateScripts = {\n$scripts\n}\nlocal templateCounts = {}"
+      s"local templateDefs = {\n$defs\n}\nlocal templateInitScripts = {\n$inits\n}\nlocal templateScripts = {\n$scripts\n}\nlocal templateCounts = {}"
 
     val coroutines = world.entities
       .filter(_.updateScript.statements.nonEmpty)
@@ -234,9 +240,12 @@ ${if features.usesHandlers then
           if entities[newId].spritePath then
             entities[newId].sprite = love.graphics.newImage(entities[newId].spritePath)
           end
-          local co = templateScripts[a] and templateScripts[a](newId)
-          if co then
-            table.insert(tasks, {id = newId, co = co, handlerStack = {}})
+          local updateFn = templateScripts[a]
+          local initFn   = templateInitScripts[a]
+          if initFn then
+            table.insert(tasks, {id = newId, co = initFn(newId), handlerStack = {}, pendingUpdate = updateFn})
+          elseif updateFn then
+            table.insert(tasks, {id = newId, co = updateFn(newId), handlerStack = {}})
           end
         end
 
@@ -271,6 +280,11 @@ ${if features.usesHandlers then
         break
       end
     end
+
+    -- Stopping onInit coroutines from continuing
+    if effect == nil and coroutine.status(task.co) == "dead" and not task.dead then
+      if task.pendingUpdate then task.dead = true end
+    end
   end
 
 ${if features.usesAnimations then LuaRuntime.animUpdate else ""}
@@ -285,7 +299,13 @@ ${if features.usesCamera then
   else ""}
 
   for i = #tasks, 1, -1 do
-    if tasks[i].dead then table.remove(tasks, i) end
+    if tasks[i].dead then
+      if tasks[i].pendingUpdate then
+        local t = tasks[i]
+        table.insert(tasks, {id = t.id, co = t.pendingUpdate(t.id), handlerStack = {}})
+      end
+      table.remove(tasks, i)
+    end
   end
 end
 

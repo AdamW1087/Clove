@@ -6,12 +6,17 @@ import clove.ast.*
 case class Entity(
   name: String,
   spawnScript: Script = Script(List.empty),
+  initScript: Script = Script(List.empty),
   updateScript: Script = Script(List.empty),
   tags: List[String] = List.empty
 ):
   // Spawn script for entities
   def onSpawn(body: ScriptBuilder ?=> Unit): Entity =
     copy(spawnScript = script(body))
+
+  // Coroutine used when an entity actually spawns (not the start of the world)
+  def onInit(body: ScriptBuilder ?=> Unit): Entity =
+    copy(initScript = script(body))
 
   // Script that the entity will run every frame
   def onUpdate(body: ScriptBuilder ?=> Unit): Entity =

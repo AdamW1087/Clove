@@ -135,7 +135,14 @@ object LuaEmitter:
        |  end
        |end)""".stripMargin
 
-  // Direct mode emission (no coroutine — for custom effects, handler impls, trigger scripts)
+  def emitInitCoroutine(entityId: String, script: Script): String =
+    s"""coroutine.create(function()
+       |  -- init script for $entityId
+       |  local task_id = "$entityId"
+       |${emitScript(script, indent = 1)}
+       |end)""".stripMargin
+
+  // Direct mode emission (for custom effects, handler impls, trigger scripts)
   def emitDirectStatement(stmt: Statement, indent: Int): String =
     val pad = "  " * indent
     stmt match

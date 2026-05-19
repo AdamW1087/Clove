@@ -192,11 +192,16 @@ import clove.dsl.given
   val bullet = entity("bullet")
     .onSpawn {
       setSize(12.0, 13.0)
+      setState("ready", false)
+      setState("time", 3.0)
+    }
+    .onInit {
+      setState("facingRight", getStateOf("player", "facingRight")) 
     }
     .onUpdate {
+      when(getState("time") === 0.0) {despawn()}
       handleWith(superJump) {
-        whenElse(getStateOf("player", "facingRight")) {
-
+        whenElse(getState("facingRight")) {
           move(200.0, 0.0)
         } {
           move(-200.0, 0.0)
@@ -204,6 +209,10 @@ import clove.dsl.given
         perform(Effect.Jump())
         perform(Effect.Gravity())
       }
+
+      showState("time")
+
+      setState("time", max(getState("time") - 1.0 * Expr.DeltaTime, 0))
     }
 
 

@@ -259,11 +259,11 @@ def validate(builder: WorldBuilder): Unit =
   // States read in onUpdate must be defined in onSpawn
   val undefinedStateReads = builder.entities.flatMap { e =>
     val defined = collectStateDefs(e.spawnScript).toSet
-    val read    = collectStateReads(e.updateScript).toSet
+    val read = collectStateReads(e.updateScript).toSet ++ collectStateReads(e.initScript).toSet
     (read -- defined).map(key => s"${e.name}: $key")
   }
   require(undefinedStateReads.isEmpty,
-    s"States read in onUpdate but not defined in onSpawn: ${undefinedStateReads.mkString(", ")}")
+    s"States read in onUpdate/onInit but not defined in onSpawn: ${undefinedStateReads.mkString(", ")}")
 
   // States used by custom effects must be defined in spawn of any entity that performs them
   val customEffectKeys = builder.customEffects.map(e => e.name.toLowerCase -> collectCustomEffectStateKeys(e)).toMap
