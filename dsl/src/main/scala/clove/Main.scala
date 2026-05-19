@@ -148,6 +148,7 @@ import clove.dsl.given
       animRule("walkL", frames = List(1, 2, 3, 4), fps = 8, flipped = true )(keyDown("a"))
       animRule("idleL", frames = List(0),           fps = 1, flipped = true )
     }
+    .onInit(setState("facingRight", false))
     .onUpdate {
       perform(Effect.Camera())
 

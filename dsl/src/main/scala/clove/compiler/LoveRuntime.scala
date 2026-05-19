@@ -111,16 +111,30 @@ object LoveRuntime:
       .map { e => s"local ${e.name}Script = ${LuaEmitter.emitCoroutine(e.name, e.updateScript)}" }
       .mkString("\n")
 
+    val initCoroutines = world.entities
+      .filter(_.initScript.statements.nonEmpty)
+      .map { e => s"local ${e.name}InitScript = ${LuaEmitter.emitInitCoroutine(e.name, e.initScript)}" }
+      .mkString("\n")
+
     val spawnSetup = world.entities.map { e =>
       val tagsLua = e.tags.map(t => s"\"$t\"").mkString(", ")
       s"""  entities["${e.name}"] = {vy = 0, tags = {$tagsLua}}
          |${LuaEmitter.emitSpawnScript(e.name, e.spawnScript)}""".stripMargin
     }.mkString("\n")
 
-    val taskSetup = world.entities
-      .filter(_.updateScript.statements.nonEmpty)
-      .map { e => s"""  table.insert(tasks, {id = "${e.name}", co = ${e.name}Script, handlerStack = {}})""" }
-      .mkString("\n")
+    val taskSetup = world.entities.map { e =>
+      val hasInit = e.initScript.statements.nonEmpty
+      val hasUpdate = e.updateScript.statements.nonEmpty
+      (hasInit, hasUpdate) match
+        case (true, true) =>
+          s"""  table.insert(tasks, {id = "${e.name}", co = ${e.name}InitScript, handlerStack = {}, pendingUpdate = function(id) return ${e.name}Script end})"""
+        case (true, false) =>
+          s"""  table.insert(tasks, {id = "${e.name}", co = ${e.name}InitScript, handlerStack = {}, pendingUpdate = nil})"""
+        case (false, true) =>
+          s"""  table.insert(tasks, {id = "${e.name}", co = ${e.name}Script, handlerStack = {}})"""
+        case (false, false) =>
+          ""
+    }.filter(_.nonEmpty).mkString("\n")
 
     val visualCacheLoad = if features.usesVisuals then
       val cacheEntries = visualImagePaths.map { path =>
@@ -188,6 +202,7 @@ $effectImpls
 $templateSpawnScripts
 
 $coroutines
+$initCoroutines
 
 function love.load()
 $spawnSetup
