@@ -186,14 +186,24 @@ import clove.dsl.given
         setState("shootCooldown", 3.0)
       }
     }
+  val superJump = handler("Jump" -> 5.0, "Gravity" -> 15.0)
 
 
   val bullet = entity("bullet")
     .onSpawn {
-      setSize(12.0, 6.0)
+      setSize(12.0, 13.0)
     }
     .onUpdate {
-      move(500.0, 0.0)
+      handleWith(superJump) {
+        whenElse(getStateOf("player", "facingRight")) {
+
+          move(200.0, 0.0)
+        } {
+          move(-200.0, 0.0)
+        }
+        perform(Effect.Jump())
+        perform(Effect.Gravity())
+      }
     }
 
 
@@ -228,3 +238,24 @@ import clove.dsl.given
   val outputPath = os.pwd / "output" / "main.lua"
   LoveRuntime.writeToFile(setup, outputPath, hotReload)
   println(s"Written to $outputPath")
+
+/* 
+
+for AUDIO
+
+if we have player jumping noise, we will want it when we actually jump, BAT the way the effects work we always perform "Jump"
+hence this cannot just be tied to playing the sound underneath
+i dont think matching them to the effects is a good idea
+but shuold be able to call them from entity scripts
+
+for example region based can use "isUnderwater" trick as before and just have biomes playing the music
+or we could do it inside the region but this feels less nice
+
+
+
+examples audios
+jump
+damage
+general music
+
+*/
