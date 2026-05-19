@@ -239,6 +239,9 @@ ${if features.usesHandlers then
       if effect == "PushHandler" then
         table.insert(task.handlerStack, a)
 
+      elseif effect == "PopHandler" then
+        table.remove(task.handlerStack)
+
       elseif effect == "Despawn" then
         entities[task.id] = nil
         task.dead = true

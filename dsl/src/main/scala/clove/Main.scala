@@ -128,10 +128,12 @@ import clove.dsl.given
       )
     }
 
+    val noMove = handler("Move" -> 0.0)
+
   val player = entity("player")
     .onSpawn {
       setState("x", 100.0)
-      setState("y", 0.0)
+      setState("y", 100.0)
       setState("grounded", false)
       setState("facingRight", true)
       setState("air", 100.0)
@@ -187,7 +189,7 @@ import clove.dsl.given
         setState("shootCooldown", 3.0)
       }
     }
-  val superJump = handler("Jump" -> 5.0, "Gravity" -> 15.0)
+  val superJump = handler("Jump" -> 5.0, "Gravity" -> 0.75 * propagate())
 
 
   val bullet = entity("bullet")

@@ -93,8 +93,12 @@ object LuaEmitter:
         val allFields = List(values, impls).filter(_.nonEmpty).mkString(", ")
         val nameComment = handler.name.map(n => s" -- $n").getOrElse("")
         val bodyLua = emitScript(body, indent)
-        val bodySep = if bodyLua.nonEmpty then s"\n$bodyLua" else ""
-        s"""${pad}coroutine.yield("PushHandler", {$allFields})$nameComment$bodySep"""
+        if bodyLua.nonEmpty then
+          s"""${pad}coroutine.yield("PushHandler", {$allFields})$nameComment
+             |$bodyLua
+             |${pad}coroutine.yield("PopHandler")""".stripMargin
+        else
+          s"""${pad}coroutine.yield("PushHandler", {$allFields})$nameComment"""
 
       case Noop => // TODO
         ""
