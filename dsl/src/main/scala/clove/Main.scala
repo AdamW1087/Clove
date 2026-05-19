@@ -29,9 +29,9 @@ import clove.dsl.given
           when((startX - x) > turnRange) { setState("direction",  1.0) }
         }
 
-        whenElse(dir === 1.0) {
+        when(dir === 1.0) {
           move(speed, 0.0)
-        } {
+        } otherwise {
           move(-speed, 0.0)
         }
 
@@ -75,18 +75,18 @@ import clove.dsl.given
     val startX = getState("startX")
     when((x - startX) > range) { setState("direction", -1.0) }
     when((startX - x) > range) { setState("direction",  1.0) }
-    whenElse(getState("direction") === 1.0) {
+    when(getState("direction") === 1.0) {
       move(speed, 0.0)
-    } {
+    } otherwise {
       move(-speed, 0.0)
     }
   }
 
   def chasePlayer(speed: Double = 250.0, chaseRange: Double = 200.0, leashRange: Double = 300.0): ScriptBuilder ?=> Unit = {
     when(exists("player")) {
-      whenElse(getStateOf("player", "x") > getState("x")) {
+      when(getStateOf("player", "x") > getState("x")) {
         move(speed, 0.0)
-      } {
+      } otherwise {
         move(-speed, 0.0)
       }
       when(collides(Expr.Var("player"))) {
@@ -169,10 +169,10 @@ import clove.dsl.given
       when(keyDown("space")) { perform(Effect.Jump()) }
 
       showState("health")
-      whenElse(query("isUnderwater")) {
+      when(query("isUnderwater")) {
         perform(Drown)
         showState("air")
-      } {
+      } otherwise {
         setState("air", 100.0)
       }
 
@@ -204,9 +204,9 @@ import clove.dsl.given
     .onUpdate {
       when(getState("time") === 0.0) {despawn()}
       handleWith(superJump) {
-        whenElse(getState("facingRight")) {
+        when(getState("facingRight")) {
           move(200.0, 0.0)
-        } {
+        } otherwise {
           move(-200.0, 0.0)
         }
         perform(Effect.Jump())
@@ -237,7 +237,7 @@ import clove.dsl.given
       visual = tile("assets/water.png", 32)) (waterRegion)
 
     spawn(player)
-    // spawn(item)
+    spawn(item)
     spawn(goomba)
     spawn(goomba2)
 

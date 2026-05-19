@@ -66,9 +66,14 @@ def register(effects: Effect.Custom*)(using b: WorldBuilder): Unit =
   b.addCustomEffects(effects.toList)
 
 
-// Control flow
-def when(cond: Expr)(body: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): Unit =
-  b += If(cond, script(body))
+class WhenClause(cond: Expr, thenBody: Script)(using b: ScriptBuilder):
+  b += If(cond, thenBody)
+
+  def otherwise(elseBody: ScriptBuilder ?=> Unit): Unit =
+    b.replaceLast(IfElse(cond, thenBody, script(elseBody)))
+
+def when(cond: Expr)(body: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): WhenClause =
+  WhenClause(cond, script(body))
 
 def whenElse(cond: Expr)(thenBody: ScriptBuilder ?=> Unit)(elseBody: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): Unit =
   b += IfElse(cond, script(thenBody), script(elseBody))

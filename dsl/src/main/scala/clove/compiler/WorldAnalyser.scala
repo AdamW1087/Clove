@@ -33,7 +33,7 @@ object WorldAnalyser:
     // Check whether any script contains a HandleWith statement
     def hasHandleWith(script: Script): Boolean =
       script.statements.exists {
-        case HandleWith(_, body) => true || hasHandleWith(body)
+        case HandleWith(_, body) => true
         case If(_, t)            => hasHandleWith(t)
         case IfElse(_, t, e)     => hasHandleWith(t) || hasHandleWith(e)
         case Loop(body)          => hasHandleWith(body)

@@ -10,6 +10,10 @@ class ScriptBuilder:
 
   def +=(stmt: Statement): Unit = steps += stmt
 
+  def replaceLast(stmt: Statement): Unit =
+    if steps.nonEmpty then
+      steps(steps.size - 1) = stmt
+
   def nextVar(): String =
     val name = s"res_$resultCounter"
     resultCounter += 1
