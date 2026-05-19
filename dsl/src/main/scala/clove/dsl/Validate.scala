@@ -148,6 +148,12 @@ def validate(builder: WorldBuilder): Unit =
   require(missingSize.isEmpty,
     s"Entities missing setSize: ${missingSize.mkString(", ")}")
 
+  val missingTemplateSize = builder.templates.values
+    .filterNot(e => hasSetSize(e.spawnScript) || hasSetSize(e.updateScript))
+    .map(_.name).toList
+  require(missingTemplateSize.isEmpty,
+    s"Templates missing setSize: ${missingTemplateSize.mkString(", ")}")
+
   // Configure must not appear in update scripts
   val configInUpdate = builder.entities.flatMap(e => collectConfigureInUpdate(e.updateScript))
   require(configInUpdate.isEmpty,
