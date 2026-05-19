@@ -136,6 +136,7 @@ import clove.dsl.given
       setState("facingRight", true)
       setState("air", 100.0)
       setState("health", 50.0)
+      setState("shootCooldown", 0.0)
 
       setSize(50.0, 80.0)
       setSpritesheet("assets/player_sheet.png", 64, 64)
@@ -175,6 +176,24 @@ import clove.dsl.given
       when(getState("health") <= 0.0) {
         despawn()
       }
+
+      when(getState("shootCooldown") > 0.0) {
+        setState("shootCooldown",  max(getState("shootCooldown") - 1.0 * Expr.DeltaTime, 0.0))
+      }
+
+      when(keyDown("k") && getState("shootCooldown") === 0.0) {
+        spawnAt("bullet", getState("x"), getState("y"))
+        setState("shootCooldown", 3.0)
+      }
+    }
+
+
+  val bullet = entity("bullet")
+    .onSpawn {
+      setSize(12.0, 6.0)
+    }
+    .onUpdate {
+      move(500.0, 0.0)
     }
 
 
@@ -196,9 +215,11 @@ import clove.dsl.given
       visual = tile("assets/water.png", 32)) (waterRegion)
 
     spawn(player)
-    spawn(item)
+    // spawn(item)
     spawn(goomba)
     spawn(goomba2)
+
+    template(bullet)
 
     handle(physics)
     register(Drown)

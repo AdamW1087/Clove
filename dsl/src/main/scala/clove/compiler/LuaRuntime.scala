@@ -335,7 +335,6 @@ object LuaRuntime:
        |          love.graphics.pop()
        |        end""".stripMargin
 
-
   val visualDrawFn: String =
     """|local function drawRegionVisual(region)
        |  local img = images[region.visualImage]
@@ -370,4 +369,51 @@ object LuaRuntime:
        |  elseif region.visualMode == "sprite" then
        |    love.graphics.draw(img, region.x - camera.x, region.y - camera.y)
        |  end
+       |end""".stripMargin
+
+  // Tag system helpers
+  val tagHelpers: String =
+    """|-- Returns all entity ids that have the given tag
+       |local function findByTag(tag)
+       |  local result = {}
+       |  for id, e in pairs(entities) do
+       |    if e.tags then
+       |      for _, t in ipairs(e.tags) do
+       |        if t == tag then table.insert(result, id); break end
+       |      end
+       |    end
+       |  end
+       |  return result
+       |end
+       |
+       |-- Returns true if the entity with task_id collides with any entity that has the given tag
+       |local function collidesWithTag(e, tag)
+       |  for id, other in pairs(entities) do
+       |    if other.tags then
+       |      for _, t in ipairs(other.tags) do
+       |        if t == tag and checkCollision(e, other) then return true, id end
+       |      end
+       |    end
+       |  end
+       |  return false, nil
+       |end
+       |
+       |-- Returns the id of the nearest entity with the given tag, or nil
+       |local function nearest(fromId, tag)
+       |  local e = entities[fromId]
+       |  if not e then return nil end
+       |  local bestId, bestDist = nil, math.huge
+       |  for id, other in pairs(entities) do
+       |    if id ~= fromId and other.tags then
+       |      for _, t in ipairs(other.tags) do
+       |        if t == tag then
+       |          local dx = (other.x or 0) - (e.x or 0)
+       |          local dy = (other.y or 0) - (e.y or 0)
+       |          local dist = dx*dx + dy*dy
+       |          if dist < bestDist then bestDist = dist; bestId = id end
+       |        end
+       |      end
+       |    end
+       |  end
+       |  return bestId
        |end""".stripMargin

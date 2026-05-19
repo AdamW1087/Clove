@@ -5,7 +5,7 @@ import clove.ast.*
 object LuaEmitter:
 
   // Expression emission
-  // inCondition - true when emitting inside animRule/region conditions, where StateRead/GlobalRead map to direct table access
+  // inCondition (true when emitting inside animRule/region conditions)
   def emitExpr(expr: Expr, inCondition: Boolean = false): String = expr match
     case Expr.Num(v)       => v.toString
     case Expr.Str(v)       => s"\"$v\""
@@ -30,6 +30,9 @@ object LuaEmitter:
 
     case Expr.EntityExists(id) =>
       s"(entities[\"$id\"] ~= nil)"
+
+    case Expr.DeltaTime =>
+      "_clove_dt"
 
     case Expr.Propagate =>
       s"{value = 1.0, propagate = true, op = \"*\"}"
@@ -58,7 +61,7 @@ object LuaEmitter:
         s"${pad}${emitYield(effect)}"
 
       case Configure(_) =>
-        "" // spawn-only, never emitted in update scripts
+        "" // shouldnt be in onUpdate
 
       case If(cond, thenBranch) =>
         s"""${pad}if ${emitExpr(cond)} then
@@ -114,6 +117,7 @@ object LuaEmitter:
     case Effect.Query(name)                  => s"coroutine.yield(\"$name\")"
     case Effect.ShowState(key)               => s"coroutine.yield(\"ShowState\", \"$key\")"
     case Effect.SetSize(w, h)                => s"coroutine.yield(\"SetSize\", ${emitExpr(w)}, ${emitExpr(h)})"
+    case Effect.SpawnAt(tpl, x, y)           => s"coroutine.yield(\"SpawnAt\", \"$tpl\", ${emitExpr(x)}, ${emitExpr(y)})"
 
   def emitScript(script: Script, indent: Int = 0): String =
     script.statements

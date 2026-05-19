@@ -26,6 +26,9 @@ enum Expr:
   case EntityRead(id: String, key: String)
   case EntityExists(id: String)
 
+  // Direct dt access, for timers/cooldowns only, doing physics etc can bypass handlers
+  case DeltaTime
+
 object Expr:
   given Conversion[Double, Expr] = Expr.Num(_)
   given Conversion[Int, Expr] = i => Expr.Num(i.toDouble)

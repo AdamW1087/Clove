@@ -82,6 +82,8 @@ def keyDown(key: String): Expr =
   Expr.KeyDown(key)
 
 
+val deltaTime: Expr = Expr.DeltaTime
+
 // Handlers
 def propagate(): Expr = Expr.Propagate
 
@@ -163,6 +165,15 @@ def camera()(using b: ScriptBuilder): Unit =
   perform(Effect.Camera())
 
 
+// Register an entity as a spawnable template
+def template(e: Entity)(using b: WorldBuilder): Unit =
+  b.addTemplate(e)
+
+// Spawn a registered template entity at the given position
+def spawnAt(templateName: String, x: Expr, y: Expr)(using b: ScriptBuilder): Unit =
+  perform(Effect.SpawnAt(templateName, x, y))
+
+
 // UI / Debug
 // TODO: draw() planned for UI system
 def draw()(using b: ScriptBuilder): Unit =
@@ -205,6 +216,7 @@ def obsStateOf(id: String, key: String): Expr = Expr.EntityRead(id, key)
 
 def exists(id: String): Expr = Expr.EntityExists(id)
 
+// Finds the first matching behaviour
 def switchState(stateKey: String, states: (String, ScriptBuilder ?=> Unit)*)(using b: ScriptBuilder): Unit =
   if states.isEmpty then return
   val current = getState(stateKey)
@@ -223,7 +235,6 @@ def switchState(stateKey: String, states: (String, ScriptBuilder ?=> Unit)*)(usi
 def max(exprs: Expr*): Expr = Expr.Max(exprs*)
 def min(exprs: Expr*): Expr = Expr.Min(exprs*)
 
-// TODO: add flip (e.g. animRule(..., flipped = true)) for horizontal flipping
 def animRule(name: String, frames: List[Int], fps: Int, flipped: Boolean)(using b: ScriptBuilder): Unit =
   b += Configure(SpawnConfig.AnimRule(name, frames, fps, condition = None, flipped))
 

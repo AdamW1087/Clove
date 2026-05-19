@@ -82,13 +82,32 @@ object LoveRuntime:
       s"  ${e.name.toLowerCase} = ${LuaEmitter.emitImpl(e.impl)}"
     }.mkString(",\n")
 
+    val templateCoroutines = world.templates.values
+      .filter(_.updateScript.statements.nonEmpty)
+      .map { e => s"local ${e.name}Template = ${LuaEmitter.emitCoroutine(e.name, e.updateScript)}" }
+      .mkString("\n")
+
+    val templateSpawnScripts = if world.templates.isEmpty then "" else
+      val defs = world.templates.values.map { e =>
+        s"""  ["${e.name}"] = function(id)\n${LuaEmitter.emitSpawnScript(e.name, e.spawnScript).replace(s""""${e.name}"""", "id")}\n  end"""
+      }.mkString(",\n")
+
+      val scripts = world.templates.values
+        .filter(_.updateScript.statements.nonEmpty)
+        .map { e =>
+          s"""  ["${e.name}"] = function(id) return ${LuaEmitter.emitCoroutine(e.name, e.updateScript).replace(s""""${e.name}"""", "id")} end"""
+        }.mkString(",\n")
+
+      s"local templateDefs = {\n$defs\n}\nlocal templateScripts = {\n$scripts\n}\nlocal templateCounts = {}"
+
     val coroutines = world.entities
       .filter(_.updateScript.statements.nonEmpty)
       .map { e => s"local ${e.name}Script = ${LuaEmitter.emitCoroutine(e.name, e.updateScript)}" }
       .mkString("\n")
 
     val spawnSetup = world.entities.map { e =>
-      s"""  entities["${e.name}"] = {vy = 0}
+      val tagsLua = e.tags.map(t => s"\"$t\"").mkString(", ")
+      s"""  entities["${e.name}"] = {vy = 0, tags = {$tagsLua}}
          |${LuaEmitter.emitSpawnScript(e.name, e.spawnScript)}""".stripMargin
     }.mkString("\n")
 
@@ -136,11 +155,15 @@ local regions = {
 $regionTable
 }
 
+_clove_dt = nil
+
 ${if features.usesShowState then "local uiDrawList = {}" else ""}
 ${if features.usesTriggers  then "local prevOverlap = {}" else ""}
 ${if features.usesVisuals   then "local images = {}" else ""}
 
 ${LuaRuntime.utilityFunctions(features)}
+
+${LuaRuntime.tagHelpers}
 
 ${if features.usesHandlers then LuaRuntime.resolveFunction else ""}
 
@@ -156,7 +179,8 @@ local effect_impls = {
 $effectImpls
 }
 
--- Entity coroutines
+$templateSpawnScripts
+
 $coroutines
 
 function love.load()
@@ -174,6 +198,7 @@ $visualCacheLoad
 end
 
 function love.update(dt)
+_clove_dt = dt
 $hotReloadCheck
 ${if features.usesShowState then "  uiDrawList = {}" else ""}
 ${if features.usesHandlers then
@@ -197,6 +222,23 @@ ${if features.usesHandlers then
         entities[task.id] = nil
         task.dead = true
         break
+
+
+      elseif effect == "SpawnAt" then
+        local tpl = templateDefs[a]
+        if tpl then
+          templateCounts[a] = (templateCounts[a] or 0) + 1
+          local newId = a .. "_" .. templateCounts[a]
+          entities[newId] = {vy = 0, x = b, y = c, tags = {}}
+          tpl(newId)
+          if entities[newId].spritePath then
+            entities[newId].sprite = love.graphics.newImage(entities[newId].spritePath)
+          end
+          local co = templateScripts[a] and templateScripts[a](newId)
+          if co then
+            table.insert(tasks, {id = newId, co = co, handlerStack = {}})
+          end
+        end
 
       elseif effect == "SetStateOf" then
         if entities[a] then entities[a][b] = c end

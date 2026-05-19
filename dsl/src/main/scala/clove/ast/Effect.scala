@@ -26,3 +26,4 @@ enum Effect:
   case Draw()
   case ShowState(key: String)
   case Camera()
+  case SpawnAt(templateName: String, x: Expr, y: Expr)
