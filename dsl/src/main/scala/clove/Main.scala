@@ -1,6 +1,7 @@
 import clove.dsl.*
 import clove.compiler.*
 import clove.ast.*
+import clove.ast.Key.*
 import clove.dsl.given
 
 @main def run(args: String*): Unit =
@@ -47,23 +48,24 @@ import clove.dsl.given
     }
   }
 
+  val isUnderwater = QueryKey("isUnderwater")
 
   val physics = handler(
-    "Gravity"  -> 10.0,
-    "Jump"     -> 5.0,
-    "Move"     -> 1.0,
-    "Drown"    -> 8.0,
-    "isUnderwater" -> false
+    Gravity      -> 10.0,
+    Jump         -> 5.0,
+    Move         -> 1.0,
+    Drown        -> 8.0,
+    isUnderwater -> false
   )
 
   val waterRegion = handler(
-    "Move"         -> 0.3,
-    "Drown"        -> 10.0,
-    "isUnderwater" -> true,
-    "Jump"         -> propagate() via { (v, dt) => script { setState("vy", -v) } }
+    Move         -> 0.3,
+    Drown        -> 10.0,
+    isUnderwater -> true,
+    Jump         -> propagate() via { (v, dt) => script { setState("vy", -v) } }
   )
 
-  val speedBoost = handler("Move" -> 2.0 * propagate())
+  val speedBoost = handler(Move -> 2.0 * propagate())
 
 
   val goomba  = patrolEnemy("goomba",  spawnX = 400.0, spawnY = 0.0, speed = 120.0, turnRange = 150.0)
@@ -128,8 +130,6 @@ import clove.dsl.given
       )
     }
 
-    val noMove = handler("Move" -> 0.0)
-
   val player = entity("player")
     .onSpawn {
       setState("x", 100.0)
@@ -169,7 +169,7 @@ import clove.dsl.given
       when(keyDown("space")) { perform(Effect.Jump()) }
 
       showState("health")
-      when(query("isUnderwater")) {
+      when(isUnderwater()) {
         perform(Drown)
         showState("air")
       } otherwise {
@@ -189,7 +189,7 @@ import clove.dsl.given
         setState("shootCooldown", 3.0)
       }
     }
-  val superJump = handler("Jump" -> 5.0, "Gravity" -> 0.75 * propagate())
+  val superJump = handler(Jump -> 5.0, Gravity -> 15.0)
 
 
   val bullet = entity("bullet")
@@ -237,7 +237,7 @@ import clove.dsl.given
       visual = tile("assets/water.png", 32)) (waterRegion)
 
     spawn(player)
-    spawn(item)
+    // spawn(item)
     spawn(goomba)
     spawn(goomba2)
 

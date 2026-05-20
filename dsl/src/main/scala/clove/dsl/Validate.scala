@@ -110,7 +110,7 @@ private def animRuleBeforeSheet(script: Script): Boolean =
   }
   firstRuleIdx >= 0 && (sheetIdx < 0 || firstRuleIdx < sheetIdx)
 
-private def collectCustomEffectStateKeys(effect: Effect.Custom): Set[String] =
+private def collectCustomEffectStateKeys(effect: CustomEffect): Set[String] =
   def fromScript(script: Script): List[String] =
     script.statements.flatMap {
       case Bind(_, Effect.GetState(key))    => List(key)
@@ -221,7 +221,7 @@ def validate(builder: WorldBuilder): Unit =
     s"Query effects missing default handler values: ${missingQueryDefaults.mkString(", ")}")
 
   // Custom effect validation
-  val registeredNames = builder.customEffects.map(_.name.toLowerCase).toSet
+  val registeredNames = builder.customEffects.map(_.name).toSet
   val builtInKeys = Set("move", "jump", "gravity", "despawn", "draw",
                         "setstate", "getstate", "setglobal", "getglobal", "collides", "camera", "setsize")
   val knownKeys = registeredNames ++ builtInKeys ++ queryNames
@@ -266,7 +266,7 @@ def validate(builder: WorldBuilder): Unit =
     s"States read in onUpdate/onInit but not defined in onSpawn: ${undefinedStateReads.mkString(", ")}")
 
   // States used by custom effects must be defined in spawn of any entity that performs them
-  val customEffectKeys = builder.customEffects.map(e => e.name.toLowerCase -> collectCustomEffectStateKeys(e)).toMap
+  val customEffectKeys = builder.customEffects.map(e => e.name -> collectCustomEffectStateKeys(e)).toMap
 
   val undefinedCustomStateKeys = builder.entities.flatMap { entity =>
     val defined = collectStateDefs(entity.spawnScript).toSet

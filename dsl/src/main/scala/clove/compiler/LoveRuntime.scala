@@ -236,19 +236,19 @@ ${if features.usesHandlers then
     while effect ~= nil do
       local response = nil
 
-      if effect == "PushHandler" then
+      if effect == "pushhandler" then
         table.insert(task.handlerStack, a)
 
-      elseif effect == "PopHandler" then
+      elseif effect == "pophandler" then
         table.remove(task.handlerStack)
 
-      elseif effect == "Despawn" then
+      elseif effect == "despawn" then
         entities[task.id] = nil
         task.dead = true
         break
 
 
-      elseif effect == "SpawnAt" then
+      elseif effect == "spawnat" then
         local tpl = templateDefs[a]
         if tpl then
           templateCounts[a] = (templateCounts[a] or 0) + 1
@@ -267,10 +267,10 @@ ${if features.usesHandlers then
           end
         end
 
-      elseif effect == "SetStateOf" then
+      elseif effect == "setstateof" then
         if entities[a] then entities[a][b] = c end
 
-      elseif effect == "GetStateOf" then
+      elseif effect == "getstateof" then
         response = entities[a] and entities[a][b] or nil
 
       else

@@ -94,34 +94,34 @@ object LuaEmitter:
         val nameComment = handler.name.map(n => s" -- $n").getOrElse("")
         val bodyLua = emitScript(body, indent)
         if bodyLua.nonEmpty then
-          s"""${pad}coroutine.yield("PushHandler", {$allFields})$nameComment
+          s"""${pad}coroutine.yield("pushhandler", {$allFields})$nameComment
              |$bodyLua
-             |${pad}coroutine.yield("PopHandler")""".stripMargin
+             |${pad}coroutine.yield("pophandler")""".stripMargin
         else
-          s"""${pad}coroutine.yield("PushHandler", {$allFields})$nameComment"""
+          s"""${pad}coroutine.yield("pushhandler", {$allFields})$nameComment"""
 
       case Noop => // TODO
         ""
 
   def emitYield(effect: Effect): String = effect match
-    case Effect.Move(dx, dy)                 => s"coroutine.yield(\"Move\", ${emitExpr(dx)}, ${emitExpr(dy)})"
-    case Effect.Jump()                       => s"coroutine.yield(\"Jump\")"
-    case Effect.Gravity()                    => s"coroutine.yield(\"Gravity\")"
-    case Effect.Despawn()                    => s"coroutine.yield(\"Despawn\")"
-    case Effect.Draw()                       => s"coroutine.yield(\"Draw\")"
-    case Effect.SetState(key, v)             => s"coroutine.yield(\"SetState\", \"$key\", ${emitExpr(v)})"
-    case Effect.GetState(key)                => s"coroutine.yield(\"GetState\", \"$key\")"
-    case Effect.SetGlobal(key, v)            => s"coroutine.yield(\"SetGlobal\", \"$key\", ${emitExpr(v)})"
-    case Effect.GetGlobal(key)               => s"coroutine.yield(\"GetGlobal\", \"$key\")"
-    case Effect.SetStateOf(targetId, key, v) => s"coroutine.yield(\"SetStateOf\", \"$targetId\", \"$key\", ${emitExpr(v)})"
-    case Effect.GetStateOf(targetId, key)    => s"coroutine.yield(\"GetStateOf\", \"$targetId\", \"$key\")"
-    case Effect.Collides(target)             => s"coroutine.yield(\"Collides\", ${emitExprAsString(target)})"
-    case Effect.Camera()                     => s"coroutine.yield(\"Camera\")"
+    case Effect.Move(dx, dy)                 => s"coroutine.yield(\"move\", ${emitExpr(dx)}, ${emitExpr(dy)})"
+    case Effect.Jump()                       => s"coroutine.yield(\"jump\")"
+    case Effect.Gravity()                    => s"coroutine.yield(\"gravity\")"
+    case Effect.Despawn()                    => s"coroutine.yield(\"despawn\")"
+    case Effect.Draw()                       => s"coroutine.yield(\"draw\")"
+    case Effect.SetState(key, v)             => s"coroutine.yield(\"setstate\", \"$key\", ${emitExpr(v)})"
+    case Effect.GetState(key)                => s"coroutine.yield(\"getstate\", \"$key\")"
+    case Effect.SetGlobal(key, v)            => s"coroutine.yield(\"setglobal\", \"$key\", ${emitExpr(v)})"
+    case Effect.GetGlobal(key)               => s"coroutine.yield(\"getglobal\", \"$key\")"
+    case Effect.SetStateOf(targetId, key, v) => s"coroutine.yield(\"setstateof\", \"$targetId\", \"$key\", ${emitExpr(v)})"
+    case Effect.GetStateOf(targetId, key)    => s"coroutine.yield(\"getstateof\", \"$targetId\", \"$key\")"
+    case Effect.Collides(target)             => s"coroutine.yield(\"collides\", ${emitExprAsString(target)})"
+    case Effect.Camera()                     => s"coroutine.yield(\"camera\")"
     case Effect.Custom(name, _)              => s"coroutine.yield(\"$name\")"
     case Effect.Query(name)                  => s"coroutine.yield(\"$name\")"
-    case Effect.ShowState(key)               => s"coroutine.yield(\"ShowState\", \"$key\")"
-    case Effect.SetSize(w, h)                => s"coroutine.yield(\"SetSize\", ${emitExpr(w)}, ${emitExpr(h)})"
-    case Effect.SpawnAt(tpl, x, y)           => s"coroutine.yield(\"SpawnAt\", \"$tpl\", ${emitExpr(x)}, ${emitExpr(y)})"
+    case Effect.ShowState(key)               => s"coroutine.yield(\"showstate\", \"$key\")"
+    case Effect.SetSize(w, h)                => s"coroutine.yield(\"setsize\", ${emitExpr(w)}, ${emitExpr(h)})"
+    case Effect.SpawnAt(tpl, x, y)           => s"coroutine.yield(\"spawnat\", \"$tpl\", ${emitExpr(x)}, ${emitExpr(y)})"
 
   def emitScript(script: Script, indent: Int = 0): String =
     script.statements

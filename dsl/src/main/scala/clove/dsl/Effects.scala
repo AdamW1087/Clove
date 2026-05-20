@@ -7,6 +7,9 @@ import clove.ast.*
 def perform(effect: Effect)(using b: ScriptBuilder): Unit =
   b += Perform(effect)
 
+def perform(effect: CustomEffect)(using b: ScriptBuilder): Unit =
+  b += Perform(effect.toEffect)
+
 // Performs an effect and binds the return value to a variable
 def bind(effect: Effect)(using b: ScriptBuilder): Expr =
   val varName = b.nextVar()
@@ -53,19 +56,19 @@ def global(key: String, value: Expr)(using b: WorldBuilder): Unit =
 
 
 // Queries and custom effects
-def query(name: String)(using b: ScriptBuilder): Expr =
-  bind(Effect.Query(name))
+def queryKey(name: String): QueryKey = QueryKey(name)
 
 def collides(target: Expr)(using b: ScriptBuilder): Expr =
   bind(Effect.Collides(target))
 
-def customEffect(name: String)(impl: (Expr, Expr) => Script): Effect.Custom =
-  Effect.Custom(name, impl)
+def customEffect(name: String)(impl: (Expr, Expr) => Script): CustomEffect =
+  CustomEffect(name, impl)
 
-def register(effects: Effect.Custom*)(using b: WorldBuilder): Unit =
+def register(effects: CustomEffect*)(using b: WorldBuilder): Unit =
   b.addCustomEffects(effects.toList)
 
 
+// Control flow
 class WhenClause(cond: Expr, thenBody: Script)(using b: ScriptBuilder):
   b += If(cond, thenBody)
 

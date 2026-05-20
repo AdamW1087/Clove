@@ -246,21 +246,21 @@ object LuaRuntime:
 
   def dispatchTable(f: WorldFeatures): String =
     val entries = List(
-      if f.usesGravity  then Some("  Gravity  = function(task, er, a, b, dt) handleGravity(task, er, dt) end,") else None,
-      if f.usesJump     then Some("  Jump     = function(task, er, a, b, dt) handleJump(task, er, dt) end,") else None,
-      if f.usesMove     then Some("  Move     = function(task, er, a, b, dt) handleMove(task, er, a, b, dt) end,") else None,
-      Some("  SetSize  = function(task, er, a, b, dt) handleSetSize(task, a, b) end,"),
+      if f.usesGravity  then Some("  gravity  = function(task, er, a, b, dt) handleGravity(task, er, dt) end,") else None,
+      if f.usesJump     then Some("  jump     = function(task, er, a, b, dt) handleJump(task, er, dt) end,") else None,
+      if f.usesMove     then Some("  move     = function(task, er, a, b, dt) handleMove(task, er, a, b, dt) end,") else None,
+      Some("  setsize  = function(task, er, a, b, dt) handleSetSize(task, a, b) end,"),
       if f.usesCollides then Some("  Collides = function(task, er, a, b, dt) return handleCollides(task, a) end,") else None,
-      Some("""|  SetState = function(task, er, a, b, dt)
+      Some("""|  setstate = function(task, er, a, b, dt)
               |    if entities[task.id] then entities[task.id][a] = b end
               |  end,
-              |  GetState = function(task, er, a, b, dt)
+              |  getstate = function(task, er, a, b, dt)
               |    if entities[task.id] then return entities[task.id][a] end
               |  end,""".stripMargin),
-      if f.usesGlobals   then Some("""|  SetGlobal = function(task, er, a, b, dt) globals[a] = b end,
-                                      |  GetGlobal = function(task, er, a, b, dt) return globals[a] end,""".stripMargin) else None,
-      if f.usesCamera    then Some("  Camera    = function(task, er, a, b, dt) camera.follow = task.id end,") else None,
-      if f.usesShowState then Some("""|  ShowState = function(task, er, a, b, dt)
+      if f.usesGlobals   then Some("""|  setglobal = function(task, er, a, b, dt) globals[a] = b end,
+                                      |  getglobal = function(task, er, a, b, dt) return globals[a] end,""".stripMargin) else None,
+      if f.usesCamera    then Some("  camera    = function(task, er, a, b, dt) camera.follow = task.id end,") else None,
+      if f.usesShowState then Some("""|  showstate = function(task, er, a, b, dt)
                                       |    local e = entities[task.id]
                                       |    if e and e[a] ~= nil then table.insert(uiDrawList, {label = a, value = e[a]}) end
                                       |  end,""".stripMargin) else None,
