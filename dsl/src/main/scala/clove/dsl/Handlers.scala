@@ -14,6 +14,8 @@ extension (entry: (EffectKey, Expr))
   def via(f: (Expr, Expr) => Script): HandlerDirective =
     HandlerDirective.Combined(entry._1, entry._2, f)
 
+
+given Conversion[(EffectKey, Double), (EffectKey, Expr)] = (k, v) => (k, Expr.Num(v))
 // Allow plain tuples to be used as handler directives implicitly
 given Conversion[(EffectKey, Expr), HandlerDirective]    = (k, v) => HandlerDirective.ValueOnly(k, v)
 given Conversion[(EffectKey, Double), HandlerDirective]  = (k, v) => HandlerDirective.ValueOnly(k, Expr.Num(v))

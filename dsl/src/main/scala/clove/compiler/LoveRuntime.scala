@@ -104,7 +104,36 @@ object LoveRuntime:
           s"""  ["${e.name}"] = function(id) return ${LuaEmitter.emitCoroutine(e.name, e.updateScript).replace(s""""${e.name}"""", "id")} end"""
         }.mkString(",\n")
 
-      s"local templateDefs = {\n$defs\n}\nlocal templateInitScripts = {\n$inits\n}\nlocal templateScripts = {\n$scripts\n}\nlocal templateCounts = {}"
+      s"""local templateDefs = {
+         |$defs
+         |}
+         |local templateInitScripts = {
+         |$inits
+         |}
+         |local templateScripts = {
+         |$scripts
+         |}
+         |local templateCounts = {}
+         |
+         |-- Spawn a template at runtime, inserts an init and/or update script
+         |local function handleSpawnAt(name, x, y)
+         |  local tpl = templateDefs[name]
+         |  if not tpl then return end
+         |  templateCounts[name] = (templateCounts[name] or 0) + 1
+         |  local newId = name .. "_" .. templateCounts[name]
+         |  entities[newId] = {vy = 0, x = x, y = y, tags = {}}
+         |  tpl(newId)
+         |  if entities[newId].spritePath then
+         |    entities[newId].sprite = love.graphics.newImage(entities[newId].spritePath)
+         |  end
+         |  local updateFn = templateScripts[name]
+         |  local initFn   = templateInitScripts[name]
+         |  if initFn then
+         |    table.insert(tasks, {id = newId, co = initFn(newId), handlerStack = {}, pendingUpdate = updateFn})
+         |  elseif updateFn then
+         |    table.insert(tasks, {id = newId, co = updateFn(newId), handlerStack = {}})
+         |  end
+         |end""".stripMargin
 
     val coroutines = world.entities
       .filter(_.updateScript.statements.nonEmpty)
@@ -181,11 +210,16 @@ ${if features.usesShowState then "local uiDrawList = {}" else ""}
 ${if features.usesTriggers  then "local prevOverlap = {}" else ""}
 ${if features.usesVisuals   then "local images = {}" else ""}
 
+$templateSpawnScripts
+
+
 ${LuaRuntime.utilityFunctions(features)}
 
 ${LuaRuntime.tagHelpers}
 
-${if features.usesHandlers then LuaRuntime.resolveFunction else ""}
+${LuaRuntime.resolveFunction}
+
+${LuaRuntime.resolveDispatchFunction}
 
 ${LuaRuntime.builtinHandlers(features)}
 
@@ -198,8 +232,6 @@ ${if features.usesVisuals then LuaRuntime.visualDrawFn else ""}
 local effect_impls = {
 $effectImpls
 }
-
-$templateSpawnScripts
 
 $coroutines
 $initCoroutines
@@ -247,38 +279,18 @@ ${if features.usesHandlers then
         task.dead = true
         break
 
-
-      elseif effect == "spawnat" then
-        local tpl = templateDefs[a]
-        if tpl then
-          templateCounts[a] = (templateCounts[a] or 0) + 1
-          local newId = a .. "_" .. templateCounts[a]
-          entities[newId] = {vy = 0, x = b, y = c, tags = {}}
-          tpl(newId)
-          if entities[newId].spritePath then
-            entities[newId].sprite = love.graphics.newImage(entities[newId].spritePath)
-          end
-          local updateFn = templateScripts[a]
-          local initFn   = templateInitScripts[a]
-          if initFn then
-            table.insert(tasks, {id = newId, co = initFn(newId), handlerStack = {}, pendingUpdate = updateFn})
-          elseif updateFn then
-            table.insert(tasks, {id = newId, co = updateFn(newId), handlerStack = {}})
-          end
+      elseif effect == "abortframe" then
+        local aok, anext = coroutine.resume(task.co, nil)
+        while anext ~= nil do
+          aok, anext = coroutine.resume(task.co, nil)
         end
-
-      elseif effect == "setstateof" then
-        if entities[a] then entities[a][b] = c end
-
-      elseif effect == "getstateof" then
-        response = entities[a] and entities[a][b] or nil
+        break
 
       else
         local builtin = dispatch[effect]
         if builtin then
-          response = builtin(task, entityRegions, a, b, dt)
+          response = builtin(task, entityRegions, a, b, c, dt)
         else
-          -- Custom or query effect, check handler impl, then effect_impls, then return resolved value
           local effect_key = effect:lower()
           local resolved, handlerImpl = resolve(task, entityRegions, effect_key)
           if handlerImpl then
