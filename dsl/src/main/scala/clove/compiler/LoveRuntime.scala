@@ -135,15 +135,20 @@ object LoveRuntime:
          |  end
          |end""".stripMargin
 
-    val coroutines = world.entities
-      .filter(_.updateScript.statements.nonEmpty)
-      .map { e => s"local ${e.name}Script = ${LuaEmitter.emitCoroutine(e.name, e.updateScript)}" }
-      .mkString("\n")
+    // Store all coroutines
+    val coroutines =
+      "local _scripts = {}\n" +
+      world.entities
+        .filter(_.updateScript.statements.nonEmpty)
+        .map { e => s"""_scripts["${e.name}"] = ${LuaEmitter.emitCoroutine(e.name, e.updateScript)}""" }
+        .mkString("\n")
 
-    val initCoroutines = world.entities
-      .filter(_.initScript.statements.nonEmpty)
-      .map { e => s"local ${e.name}InitScript = ${LuaEmitter.emitInitCoroutine(e.name, e.initScript)}" }
-      .mkString("\n")
+    val initCoroutines =
+      "local _initScripts = {}\n" +
+      world.entities
+        .filter(_.initScript.statements.nonEmpty)
+        .map { e => s"""_initScripts["${e.name}"] = ${LuaEmitter.emitInitCoroutine(e.name, e.initScript)}""" }
+        .mkString("\n")
 
     val spawnSetup = world.entities.map { e =>
       val tagsLua = e.tags.map(t => s"\"$t\"").mkString(", ")
@@ -156,11 +161,11 @@ object LoveRuntime:
       val hasUpdate = e.updateScript.statements.nonEmpty
       (hasInit, hasUpdate) match
         case (true, true) =>
-          s"""  table.insert(tasks, {id = "${e.name}", co = ${e.name}InitScript, handlerStack = {}, pendingUpdate = function(id) return ${e.name}Script end})"""
+          s"""  table.insert(tasks, {id = "${e.name}", co = _initScripts["${e.name}"], handlerStack = {}, pendingUpdate = function(id) return _scripts["${e.name}"] end})"""
         case (true, false) =>
-          s"""  table.insert(tasks, {id = "${e.name}", co = ${e.name}InitScript, handlerStack = {}, pendingUpdate = nil})"""
+          s"""  table.insert(tasks, {id = "${e.name}", co = _initScripts["${e.name}"], handlerStack = {}, pendingUpdate = nil})"""
         case (false, true) =>
-          s"""  table.insert(tasks, {id = "${e.name}", co = ${e.name}Script, handlerStack = {}})"""
+          s"""  table.insert(tasks, {id = "${e.name}", co = _scripts["${e.name}"], handlerStack = {}})"""
         case (false, false) =>
           ""
     }.filter(_.nonEmpty).mkString("\n")
