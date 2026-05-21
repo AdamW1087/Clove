@@ -16,4 +16,5 @@ case class WorldFeatures(
   usesEntityReads: Boolean,
   usesCrossEntityReads:  Boolean,
   usesCrossEntityWrites: Boolean,
+  usesSpawnAt: Boolean,
 )

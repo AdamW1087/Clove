@@ -19,13 +19,13 @@ object WorldAnalyser:
     val allScripts = entityScripts ++ triggerScripts ++ customEffectScripts
 
     // Recursively collect all effects from a script
-    def collectEffects(script: Script): List[Effect] =
+    def collectEffects(script: Script): List[Effect[?]] =
       script.statements.flatMap {
         case Perform(e)                        => List(e)
         case Bind(_, e)                        => List(e)
+        case Discard(e)                        => List(e)
         case If(_, t)                          => collectEffects(t)
         case IfElse(_, t, e)                   => collectEffects(t) ++ collectEffects(e)
-        case Loop(body)                        => collectEffects(body)
         case HandleWith(_, body)               => collectEffects(body)
         case _                                 => Nil
       }
@@ -36,13 +36,12 @@ object WorldAnalyser:
         case HandleWith(_, body) => true
         case If(_, t)            => hasHandleWith(t)
         case IfElse(_, t, e)     => hasHandleWith(t) || hasHandleWith(e)
-        case Loop(body)          => hasHandleWith(body)
         case _                   => false
       }
 
     val allEffects = allScripts.flatMap(collectEffects)
 
-    def uses(p: Effect => Boolean): Boolean = allEffects.exists(p)
+    def uses(p: Effect[?] => Boolean): Boolean = allEffects.exists(p)
 
     def scanExpr(expr: Expr): Boolean = expr match
       case Expr.EntityRead(_, _) => true
@@ -55,7 +54,6 @@ object WorldAnalyser:
       script.statements.exists {
         case If(cond, t)         => scanExpr(cond) || scanScript(t)
         case IfElse(cond, t, el) => scanExpr(cond) || scanScript(t) || scanScript(el)
-        case Loop(body)          => scanScript(body)
         case HandleWith(_, body) => scanScript(body)
         case _                   => false
       }
@@ -93,5 +91,6 @@ object WorldAnalyser:
       usesVisuals = world.regions.exists(_.visual.isDefined),
       usesEntityReads = usesEntityReadsVal,
       usesCrossEntityReads  = uses { case _: Effect.GetStateOf => true; case _ => false },
-      usesCrossEntityWrites = uses { case _: Effect.SetStateOf => true; case _ => false }
+      usesCrossEntityWrites = uses { case _: Effect.SetStateOf => true; case _ => false },
+      usesSpawnAt           = uses { case _: Effect.SpawnAt => true; case _ => false } || world.templates.nonEmpty
     )

@@ -6,19 +6,17 @@ case class Script(statements: List[Statement])
 sealed trait Statement
 
 // Assigns a variable (varName) to the return value of an Effect
-case class Bind(varName: String, effect: Effect) extends Statement
+case class Bind(varName: String, effect: Effect[Expr]) extends Statement
 
-// Registers the effect as acting on an entity 
-case class Perform(effect: Effect) extends Statement
+// Peforms Effects that do not return
+case class Perform(effect: Effect[Unit]) extends Statement
+
+// Continuation discarding
+case class Discard(effect: Effect[Nothing]) extends Statement
 
 
 case class If(condition: Expr, thenBranch: Script) extends Statement
 case class IfElse(condition: Expr, thenBranch: Script, elseBranch: Script) extends Statement
-
-// TODO
-case class Loop(body: Script) extends Statement // explicit loops
-case class Return(value: Expr) extends Statement // early returns
-case object Noop extends Statement // empty branches
 
 /* 
 TODO: look into setting orderings to have these float to the top

@@ -18,45 +18,42 @@ object Key:
 // A user-defined custom effect
 case class CustomEffect(effectName: String, impl: (Expr, Expr) => Script) extends EffectKey:
   val name = effectName.toLowerCase
-  def toEffect: Effect = Effect.Custom(effectName, impl)
+  def toEffect: Effect[Unit] = Effect.UserEffect[Unit](name)
 
 // A query effect key
-// val isUnderwater = QueryKey("isUnderwater")
-// handler(isUnderwater -> false)  as a key
-// isUnderwater()                  in script, binds and returns result
 case class QueryKey(effectName: String) extends EffectKey:
   val name = effectName.toLowerCase
   def apply()(using b: clove.dsl.ScriptBuilder): Expr =
     val varName = b.nextVar()
-    b += Bind(varName, Effect.Query(effectName))
+    b += Bind(varName, Effect.UserEffect[Expr](name))
     Expr.Var(varName)
 
 // Contains all Effects/functions to access and manage state
-enum Effect:
-  // Entity affecting effects
-  case Move(dx: Expr, dy: Expr)
-  case Jump()
-  case Gravity()
-  case Despawn()
-  case Collides(target: Expr)
+sealed trait Effect[+R]
 
-  // User defined (via customEffect / QueryKey)
-  case Custom(name: String, impl: (Expr, Expr) => Script = (_, _) => Script(List.empty))
-  case Query(name: String)
+object Effect:
+  // Unit responses
+  case class Move(dx: Expr, dy: Expr)                               extends Effect[Unit]
+  case class Jump()                                                 extends Effect[Unit]
+  case class Gravity()                                              extends Effect[Unit]
+  case class SetState(key: String, value: Expr)                     extends Effect[Unit]
+  case class SetGlobal(key: String, value: Expr)                    extends Effect[Unit]
+  case class SetSize(width: Expr, height: Expr)                     extends Effect[Unit]
+  case class SetStateOf(targetId: String, key: String, value: Expr) extends Effect[Unit]
+  case class Draw()                                                 extends Effect[Unit]
+  case class ShowState(key: String)                                 extends Effect[Unit]
+  case class Camera()                                               extends Effect[Unit]
+  case class SpawnAt(templateName: String, x: Expr, y: Expr)        extends Effect[Unit]
 
-  // State management
-  case SetState(key: String, value: Expr)
-  case GetState(key: String)
-  case SetGlobal(key: String, value: Expr)
-  case GetGlobal(key: String)
-  case SetSize(width: Expr, height: Expr)
+  // Effects that return an Expr
+  case class GetState(key: String)                     extends Effect[Expr]
+  case class GetGlobal(key: String)                    extends Effect[Expr]
+  case class GetStateOf(targetId: String, key: String) extends Effect[Expr]
+  case class Collides(target: Expr)                    extends Effect[Expr]
 
-  // Note these contain a string due to if 2 entities needed to access eachother (alternative would be defining both and implementing later)
-  case SetStateOf(targetId: String, key: String, value: Expr)
-  case GetStateOf(targetId: String, key: String)
+  // User-defined effect
+  // R is Unit for action effects, Expr for query effects
+  case class UserEffect[R](name: String) extends Effect[R]
 
-  // Others
-  case Draw()
-  case ShowState(key: String)
-  case Camera()
-  case SpawnAt(templateName: String, x: Expr, y: Expr)
+  // Continuation discarding effect
+  case class Despawn() extends Effect[Nothing]

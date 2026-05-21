@@ -4,14 +4,15 @@ import clove.dsl.WorldBuilder
 import clove.ast.*
 
 // Performs an effect, discarding the return value
-def perform(effect: Effect)(using b: ScriptBuilder): Unit =
+def perform(effect: Effect[Unit])(using b: ScriptBuilder): Unit =
   b += Perform(effect)
 
+// Perform wrapper for custom effects
 def perform(effect: CustomEffect)(using b: ScriptBuilder): Unit =
-  b += Perform(effect.toEffect)
+  perform(effect.toEffect)
 
-// Performs an effect and binds the return value to a variable
-def bind(effect: Effect)(using b: ScriptBuilder): Expr =
+// Binds the return value of an effect that resumes with Expr
+def bind(effect: Effect[Expr])(using b: ScriptBuilder): Expr =
   val varName = b.nextVar()
   b += Bind(varName, effect)
   Expr.Var(varName)
@@ -25,7 +26,7 @@ def jump()(using b: ScriptBuilder): Unit =
   perform(Effect.Jump())
 
 def despawn()(using b: ScriptBuilder): Unit =
-  perform(Effect.Despawn())
+  b += Discard(Effect.Despawn())
 
 def setSize(width: Double, height: Double)(using b: ScriptBuilder): Unit =
   perform(Effect.SetSize(width, height))
@@ -61,6 +62,7 @@ def queryKey(name: String): QueryKey = QueryKey(name)
 def collides(target: Expr)(using b: ScriptBuilder): Expr =
   bind(Effect.Collides(target))
 
+// CustomEffect is both an Effect (for perform) and an EffectKey (for handlers)
 def customEffect(name: String)(impl: (Expr, Expr) => Script): CustomEffect =
   CustomEffect(name, impl)
 
@@ -80,9 +82,6 @@ def when(cond: Expr)(body: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): When
 
 def whenElse(cond: Expr)(thenBody: ScriptBuilder ?=> Unit)(elseBody: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): Unit =
   b += IfElse(cond, script(thenBody), script(elseBody))
-
-def loop(body: ScriptBuilder ?=> Unit)(using b: ScriptBuilder): Unit =
-  b += Loop(script(body))
 
 
 // Input

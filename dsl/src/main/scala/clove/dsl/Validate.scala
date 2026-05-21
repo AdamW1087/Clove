@@ -4,13 +4,16 @@ package clove.dsl
 import clove.dsl.*
 import clove.ast.*
 
+// Get effect name for nicer error messages
+private def effectName(e: Effect[?]): String =
+  e.getClass.getSimpleName.stripSuffix("$")
+
 // Script trraversal helpers
 private def collectConfigureInUpdate(script: Script): List[String] =
   script.statements.flatMap {
-    case Configure(c)        => List(c.getClass.getSimpleName)
+    case Configure(c)        => List(c.getClass.getSimpleName.stripSuffix("$"))
     case If(_, t)            => collectConfigureInUpdate(t)
     case IfElse(_, t, e)     => collectConfigureInUpdate(t) ++ collectConfigureInUpdate(e)
-    case Loop(body)          => collectConfigureInUpdate(body)
     case HandleWith(_, body) => collectConfigureInUpdate(body)
     case _                   => Nil
   }
@@ -21,29 +24,24 @@ private def collectSpritePaths(script: Script): List[String] =
     case Configure(SpawnConfig.SetSpritesheet(path, _, _)) => List(path)
     case If(_, t)                                          => collectSpritePaths(t)
     case IfElse(_, t, e)                                   => collectSpritePaths(t) ++ collectSpritePaths(e)
-    case Loop(body)                                        => collectSpritePaths(body)
     case HandleWith(_, body)                               => collectSpritePaths(body)
     case _                                                 => Nil
   }
 
 private def collectQueryNames(script: Script): List[String] =
   script.statements.flatMap {
-    case Perform(Effect.Query(name)) => List(name.toLowerCase)
-    case Bind(_, Effect.Query(name)) => List(name.toLowerCase)
+    case Bind(_, Effect.UserEffect(name)) => List(name.toLowerCase)
     case If(_, t)                    => collectQueryNames(t)
     case IfElse(_, t, e)             => collectQueryNames(t) ++ collectQueryNames(e)
-    case Loop(body)                  => collectQueryNames(body)
     case HandleWith(_, body)         => collectQueryNames(body)
     case _                           => Nil
   }
 
 private def collectCustomPerforms(script: Script): List[String] =
   script.statements.flatMap {
-    case Perform(Effect.Custom(name, _)) => List(name.toLowerCase)
-    case Bind(_, Effect.Custom(name, _)) => List(name.toLowerCase)
+    case Perform(Effect.UserEffect(name)) => List(name.toLowerCase)
     case If(_, t)                        => collectCustomPerforms(t)
     case IfElse(_, t, e)                 => collectCustomPerforms(t) ++ collectCustomPerforms(e)
-    case Loop(body)                      => collectCustomPerforms(body)
     case HandleWith(_, body)             => collectCustomPerforms(body)
     case _                               => Nil
   }
@@ -53,7 +51,6 @@ private def collectHandlers(script: Script): List[Handler] =
     case HandleWith(h, body) => h :: collectHandlers(body)
     case If(_, t)            => collectHandlers(t)
     case IfElse(_, t, e)     => collectHandlers(t) ++ collectHandlers(e)
-    case Loop(body)          => collectHandlers(body)
     case _                   => Nil
   }
 
@@ -66,8 +63,9 @@ private def collectIllegalTriggerEffects(script: Script): List[String] =
     case Bind(_, Effect.GetGlobal(_))    => Nil
     case If(_, t)                        => collectIllegalTriggerEffects(t)
     case IfElse(_, t, e)                 => collectIllegalTriggerEffects(t) ++ collectIllegalTriggerEffects(e)
-    case Perform(e)                      => List(e.getClass.getSimpleName)
-    case Bind(_, e)                      => List(e.getClass.getSimpleName)
+    case Perform(e)                      => List(effectName(e))
+    case Bind(_, e)                      => List(effectName(e))
+    case Discard(e)                      => List(effectName(e))
     case _                               => Nil
   }
 
@@ -80,10 +78,8 @@ private def collectObsGlobals(expr: Expr): List[String] = expr match
 private def collectStateDefs(script: Script): List[String] =
   script.statements.flatMap {
     case Perform(Effect.SetState(key, _)) => List(key)
-    case Bind(_, Effect.SetState(key, _)) => List(key)
     case If(_, t)                         => collectStateDefs(t)
     case IfElse(_, t, e)                  => collectStateDefs(t) ++ collectStateDefs(e)
-    case Loop(body)                       => collectStateDefs(body)
     case HandleWith(_, body)              => collectStateDefs(body)
     case _                                => Nil
   }
@@ -93,7 +89,6 @@ private def collectStateReads(script: Script): List[String] =
     case Bind(_, Effect.GetState(key)) => List(key)
     case If(_, t)                      => collectStateReads(t)
     case IfElse(_, t, e)               => collectStateReads(t) ++ collectStateReads(e)
-    case Loop(body)                    => collectStateReads(body)
     case HandleWith(_, body)           => collectStateReads(body)
     case _                             => Nil
   }
@@ -115,7 +110,6 @@ private def collectCustomEffectStateKeys(effect: CustomEffect): Set[String] =
     script.statements.flatMap {
       case Bind(_, Effect.GetState(key))    => List(key)
       case Perform(Effect.SetState(key, _)) => List(key)
-      case Bind(_, Effect.SetState(key, _)) => List(key)
       case If(_, t)                         => fromScript(t)
       case IfElse(_, t, e)                  => fromScript(t) ++ fromScript(e)
       case _                                => Nil
@@ -138,7 +132,6 @@ def validate(builder: WorldBuilder): Unit =
   def hasSetSize(script: Script): Boolean =
     script.statements.exists {
       case Perform(Effect.SetSize(_, _)) => true
-      case Bind(_, Effect.SetSize(_, _)) => true
       case _ => false
     }
 

@@ -19,11 +19,11 @@ object LuaEmitter:
 
     case Expr.StateRead(key) =>
       if inCondition then s"e[\"$key\"]"
-      else s"-- obsState(\"$key\") used outside animRule condition"
+      else sys.error(s"obsState(\"$key\") used outside animRule condition, use getState instead")
 
     case Expr.GlobalRead(key) =>
       if inCondition then s"globals[\"$key\"]"
-      else s"-- obsGlobal(\"$key\") used outside condition"
+      else sys.error(s"obsGlobal(\"$key\") used outside region/animRule condition, use getGlobal instead")
 
     case Expr.EntityRead(id, key) =>
       s"(entities[\"$id\"] and entities[\"$id\"][\"$key\"] or 0.0)"
@@ -60,8 +60,11 @@ object LuaEmitter:
       case Perform(effect) =>
         s"${pad}${emitYield(effect)}"
 
-      case Configure(_) =>
-        "" // shouldnt be in onUpdate
+      case Discard(effect) =>
+        s"${pad}${emitYield(effect)}"
+
+      case Configure(c) =>
+        sys.error(s"Configure($c) found in update script, should have been caught by validator")
 
       case If(cond, thenBranch) =>
         s"""${pad}if ${emitExpr(cond)} then
@@ -74,14 +77,6 @@ object LuaEmitter:
            |${pad}else
            |${emitScript(elseBranch, indent + 1)}
            |${pad}end""".stripMargin
-
-      case Loop(body) => // TODO
-        s"""${pad}while true do
-           |${emitScript(body, indent + 1)}
-           |${pad}end""".stripMargin
-
-      case Return(value) => // TODO
-        s"${pad}return ${emitExpr(value)}"
 
       case HandleWith(handler, body) =>
         val values = handler.handles.map { (k, v) =>
@@ -100,10 +95,7 @@ object LuaEmitter:
         else
           s"""${pad}coroutine.yield("pushhandler", {$allFields})$nameComment"""
 
-      case Noop => // TODO
-        ""
-
-  def emitYield(effect: Effect): String = effect match
+  def emitYield(effect: Effect[?]): String = effect match
     case Effect.Move(dx, dy)                 => s"coroutine.yield(\"move\", ${emitExpr(dx)}, ${emitExpr(dy)})"
     case Effect.Jump()                       => s"coroutine.yield(\"jump\")"
     case Effect.Gravity()                    => s"coroutine.yield(\"gravity\")"
@@ -117,8 +109,7 @@ object LuaEmitter:
     case Effect.GetStateOf(targetId, key)    => s"coroutine.yield(\"getstateof\", \"$targetId\", \"$key\")"
     case Effect.Collides(target)             => s"coroutine.yield(\"collides\", ${emitExprAsString(target)})"
     case Effect.Camera()                     => s"coroutine.yield(\"camera\")"
-    case Effect.Custom(name, _)              => s"coroutine.yield(\"$name\")"
-    case Effect.Query(name)                  => s"coroutine.yield(\"$name\")"
+    case Effect.UserEffect(name)             => s"coroutine.yield(\"$name\")"
     case Effect.ShowState(key)               => s"coroutine.yield(\"showstate\", \"$key\")"
     case Effect.SetSize(w, h)                => s"coroutine.yield(\"setsize\", ${emitExpr(w)}, ${emitExpr(h)})"
     case Effect.SpawnAt(tpl, x, y)           => s"coroutine.yield(\"spawnat\", \"$tpl\", ${emitExpr(x)}, ${emitExpr(y)})"

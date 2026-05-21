@@ -250,7 +250,7 @@ object LuaRuntime:
       if f.usesJump     then Some("  jump     = function(task, er, a, b, dt) handleJump(task, er, dt) end,") else None,
       if f.usesMove     then Some("  move     = function(task, er, a, b, dt) handleMove(task, er, a, b, dt) end,") else None,
       Some("  setsize  = function(task, er, a, b, dt) handleSetSize(task, a, b) end,"),
-      if f.usesCollides then Some("  Collides = function(task, er, a, b, dt) return handleCollides(task, a) end,") else None,
+      if f.usesCollides then Some("  collides = function(task, er, a, b, dt) return handleCollides(task, a) end,") else None,
       Some("""|  setstate = function(task, er, a, b, dt)
               |    if entities[task.id] then entities[task.id][a] = b end
               |  end,
