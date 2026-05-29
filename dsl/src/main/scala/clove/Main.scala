@@ -1,5 +1,6 @@
 import clove.dsl.*
 import clove.compiler.*
+import clove.compiler.runtime.*
 import clove.ast.*
 import clove.ast.Key.*
 import clove.dsl.given
@@ -153,6 +154,7 @@ import clove.dsl.given
     .onInit(setState("facingRight", false))
     .onUpdate {
       perform(Effect.Camera())
+      uiLabel(100.0 , 200.0, "health: ", Some(getState("air")))
 
       when(keyDown("lshift")) { handleWith(speedBoost) }
 
@@ -168,10 +170,12 @@ import clove.dsl.given
       }
       when(keyDown("space")) { perform(Effect.Jump()) }
 
-      showState("health")
+      uiBar(200.0, 100.0, 100.0, 20.0, getState("air"), 100.0)
       when(isUnderwater()) {
         perform(Drown)
-        showState("air")
+        uiSprites(10, 60, "assets/bubble.png",
+          count = ceil(getState("air") / 20.0),
+          w = 50.0, h = 50.0, spacing = 2.0)
       } otherwise {
         setState("air", 100.0)
       }
@@ -213,7 +217,7 @@ import clove.dsl.given
         perform(Effect.Gravity())
       }
 
-      showState("time")
+      uiLabel(100.0 , 200.0, "healthP", Some(getState("health")))
 
       setState("time", max(getState("time") - 1.0 * Expr.DeltaTime, 0))
     }

@@ -11,7 +11,6 @@ object Key:
   case object Move      extends EffectKey { val name = "move"      }
   case object Collides  extends EffectKey { val name = "collides"  }
   case object Camera    extends EffectKey { val name = "camera"    }
-  case object ShowState extends EffectKey { val name = "showstate" }
   case object SetSize   extends EffectKey { val name = "setsize"   }
   case object Despawn   extends EffectKey { val name = "despawn"   }
 
@@ -40,8 +39,6 @@ object Effect:
   case class SetGlobal(key: String, value: Expr)                    extends Effect[Unit]
   case class SetSize(width: Expr, height: Expr)                     extends Effect[Unit]
   case class SetStateOf(targetId: String, key: String, value: Expr) extends Effect[Unit]
-  case class Draw()                                                 extends Effect[Unit]
-  case class ShowState(key: String)                                 extends Effect[Unit]
   case class Camera()                                               extends Effect[Unit]
   case class SpawnAt(templateName: String, x: Expr, y: Expr)        extends Effect[Unit]
 
@@ -57,3 +54,55 @@ object Effect:
 
   // Continuation discarding effect
   case class Despawn() extends Effect[Nothing]
+
+// UI effects
+sealed trait UI extends Effect[Unit]
+
+object UI:
+  // Filled progress bar with background
+  case class Bar(
+    x: Double, y: Double,
+    w: Double, h: Double,
+    value: Expr, max: Expr,
+    colour:   (Double, Double, Double),
+    bgColour: (Double, Double, Double)
+  ) extends UI
+
+  // Text label with optional dynamic value appended
+  case class Label(
+    x: Double, y: Double,
+    prefix: String,
+    value: Option[Expr] = None,
+    colour: (Double, Double, Double) = (1.0, 1.0, 1.0)
+  ) extends UI
+
+  // Repeated sprite icons
+  case class Sprites(
+    x: Double, y: Double,
+    image: String,
+    count: Expr,
+    spacing: Double,
+    w: Double,
+    h: Double
+  ) extends UI
+
+
+//  TO CHECK
+
+
+  // Hotbar
+  case class Slots(
+    x: Double, y: Double,
+    size: Double,
+    images: List[String],
+    selected: Expr,
+    spacing: Double
+  ) extends UI
+
+  // Raw image draw
+  case class Image(
+    x: Double, y: Double,
+    w: Double, h: Double,
+    image: String,
+    colour: (Double, Double, Double) = (1.0, 1.0, 1.0)
+  ) extends UI

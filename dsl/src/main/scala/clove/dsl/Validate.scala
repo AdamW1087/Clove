@@ -61,6 +61,7 @@ private def collectIllegalTriggerEffects(script: Script): List[String] =
     case Perform(Effect.SetSize(_, _))   => Nil
     case Bind(_, Effect.GetState(_))     => Nil
     case Bind(_, Effect.GetGlobal(_))    => Nil
+    case Perform(_: UI)                  => List("UI effects cannot be used in trigger scripts")
     case If(_, t)                        => collectIllegalTriggerEffects(t)
     case IfElse(_, t, e)                 => collectIllegalTriggerEffects(t) ++ collectIllegalTriggerEffects(e)
     case Perform(e)                      => List(effectName(e))
@@ -158,6 +159,24 @@ def validate(builder: WorldBuilder): Unit =
     .filterNot(path => os.exists(os.pwd / "src" / "main" / "resources" / os.RelPath(path)))
   require(missingSprites.isEmpty,
     s"Sprite files not found: ${missingSprites.mkString(", ")}")
+
+  def collectUIImagePaths(script: Script): List[String] =
+    script.statements.flatMap {
+      case Perform(UI.Sprites(_, _, image, _, _, _, _)) => List(image)
+      case Perform(UI.Slots(_, _, _, images, _, _))     => images
+      case Perform(UI.Image(_, _, _, _, image, _))      => List(image)
+      case If(_, t)                                     => collectUIImagePaths(t)
+      case IfElse(_, t, e)                              => collectUIImagePaths(t) ++ collectUIImagePaths(e)
+      case HandleWith(_, body)                          => collectUIImagePaths(body)
+      case _                                            => Nil
+    }
+
+  val missingUIImages = builder.entities
+    .flatMap(e => collectUIImagePaths(e.updateScript))
+    .distinct
+    .filterNot(path => os.exists(os.pwd / "src" / "main" / "resources" / os.RelPath(path)))
+  require(missingUIImages.isEmpty,
+    s"UI image files not found: ${missingUIImages.mkString(", ")}")
 
   // Region visual image paths must exist on disk
   val missingVisuals = builder.regions

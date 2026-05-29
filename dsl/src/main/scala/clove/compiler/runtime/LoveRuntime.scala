@@ -1,7 +1,8 @@
-package clove.compiler
+package clove.compiler.runtime
 
 import clove.ast.*
 import clove.dsl.{Region, Behaviour, Visual, VisualMode, World}
+import clove.compiler.{WorldAnalyser, LuaEmitter}
 
 object LoveRuntime:
 
@@ -170,11 +171,28 @@ object LoveRuntime:
           ""
     }.filter(_.nonEmpty).mkString("\n")
 
-    val visualCacheLoad = if features.usesVisuals then
-      val cacheEntries = visualImagePaths.map { path =>
+    def collectUIImagePaths(script: Script): List[String] =
+      script.statements.flatMap {
+        case Perform(UI.Sprites(_, _, image, _, _, _, _)) => List(image)
+        case Perform(UI.Slots(_, _, _, images, _, _))     => images
+        case Perform(UI.Image(_, _, _, _, image, _))      => List(image)
+        case If(_, t)                                     => collectUIImagePaths(t)
+        case IfElse(_, t, e)                              => collectUIImagePaths(t) ++ collectUIImagePaths(e)
+        case HandleWith(_, body)                          => collectUIImagePaths(body)
+        case _                                            => Nil
+      }
+
+    val uiImagePaths = world.entities
+      .flatMap(e => collectUIImagePaths(e.updateScript))
+      .distinct
+
+    val allImagePaths = (visualImagePaths ++ uiImagePaths).distinct
+
+    val visualCacheLoad = if features.usesVisuals || features.usesUI then
+      val cacheEntries = allImagePaths.map { path =>
         s"  images[\"$path\"] = love.graphics.newImage(\"$path\")"
       }.mkString("\n")
-      s"  -- Deduplicated region visual image cache\n$cacheEntries"
+      s"  -- Image cache (region visuals + UI)\n$cacheEntries"
     else ""
 
     val hotReloadBlock = if hotReload then
@@ -211,9 +229,9 @@ $regionTable
 
 _clove_dt = nil
 
-${if features.usesShowState then "local uiDrawList = {}" else ""}
+${UIRuntime.drawListDecl(features)}
 ${if features.usesTriggers  then "local prevOverlap = {}" else ""}
-${if features.usesVisuals   then "local images = {}" else ""}
+${if features.usesVisuals || features.usesUI then "local images = {}" else ""}
 
 $templateSpawnScripts
 
@@ -258,7 +276,7 @@ end
 function love.update(dt)
 _clove_dt = dt
 $hotReloadCheck
-${if features.usesShowState then "  uiDrawList = {}" else ""}
+${UIRuntime.drawListClear(features)}
 ${if features.usesHandlers then
     """|  local entityRegions = {}
        |  for id, e in pairs(entities) do
@@ -378,12 +396,7 @@ ${if features.usesAnimations then
     end
   end
 
-${if features.usesShowState then
-   """|  love.graphics.setColor(1, 1, 1, 1)
-  for i, item in ipairs(uiDrawList) do
-    love.graphics.print(item.label .. ": " .. tostring(item.value), 10, 10 + (i - 1) * 20)
-  end""".stripMargin
-  else ""}
+${UIRuntime.renderBlock(features)}
 end""".stripMargin
 
   def writeToFile(world: World, path: os.Path, hotReload: Boolean = false): Unit =

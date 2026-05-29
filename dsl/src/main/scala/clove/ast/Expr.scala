@@ -5,6 +5,8 @@ enum Expr:
   case Num(value: Double)
   case Not(expr: Expr)
   case Negate(expr: Expr)
+  case Ceil(expr: Expr)
+  case Floor(expr: Expr)
   case Max(exprs: Expr*)
   case Min(exprs: Expr*)
 

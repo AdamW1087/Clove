@@ -13,6 +13,8 @@ object LuaEmitter:
     case Expr.Var(name)    => name
     case Expr.Not(e)       => s"not (${emitExpr(e, inCondition)})"
     case Expr.Negate(e)    => s"(-(${emitExpr(e, inCondition)}))"
+    case Expr.Ceil(e)      => s"math.ceil(${emitExpr(e, inCondition)})"
+    case Expr.Floor(e)     => s"math.floor(${emitExpr(e, inCondition)})"
     case Expr.Max(exprs*)  => s"math.max(${exprs.map(emitExpr(_, inCondition)).mkString(", ")})"
     case Expr.Min(exprs*)  => s"math.min(${exprs.map(emitExpr(_, inCondition)).mkString(", ")})"
     case Expr.KeyDown(key) => s"love.keyboard.isDown(\"$key\")"
@@ -100,7 +102,6 @@ object LuaEmitter:
     case Effect.Jump()                       => s"coroutine.yield(\"jump\")"
     case Effect.Gravity()                    => s"coroutine.yield(\"gravity\")"
     case Effect.Despawn()                    => s"coroutine.yield(\"despawn\")"
-    case Effect.Draw()                       => s"coroutine.yield(\"draw\")"
     case Effect.SetState(key, v)             => s"coroutine.yield(\"setstate\", \"$key\", ${emitExpr(v)})"
     case Effect.GetState(key)                => s"coroutine.yield(\"getstate\", \"$key\")"
     case Effect.SetGlobal(key, v)            => s"coroutine.yield(\"setglobal\", \"$key\", ${emitExpr(v)})"
@@ -110,9 +111,26 @@ object LuaEmitter:
     case Effect.Collides(target)             => s"coroutine.yield(\"collides\", ${emitExprAsString(target)})"
     case Effect.Camera()                     => s"coroutine.yield(\"camera\")"
     case Effect.UserEffect(name)             => s"coroutine.yield(\"$name\")"
-    case Effect.ShowState(key)               => s"coroutine.yield(\"showstate\", \"$key\")"
     case Effect.SetSize(w, h)                => s"coroutine.yield(\"setsize\", ${emitExpr(w)}, ${emitExpr(h)})"
     case Effect.SpawnAt(tpl, x, y)           => s"coroutine.yield(\"spawnat\", \"$tpl\", ${emitExpr(x)}, ${emitExpr(y)})"
+
+    // UI effects
+    case UI.Bar(x, y, w, h, value, max, (r,g,b), (rb,gb,bb)) =>
+      s"""coroutine.yield("uibar", {x=$x, y=$y, w=$w, h=$h, value=${emitExpr(value)}, max=${emitExpr(max)}, r=$r, g=$g, b=$b, rb=$rb, gb=$gb, bb=$bb})"""
+
+    case UI.Label(x, y, prefix, value, (r,g,b)) =>
+      val valStr = value.map(v => s", value=${emitExpr(v)}").getOrElse("")
+      s"""coroutine.yield("uilabel", {x=$x, y=$y, prefix="$prefix"$valStr, r=$r, g=$g, b=$b})"""
+
+    case UI.Sprites(x, y, image, count, spacing, w, h) =>
+      s"""coroutine.yield("uisprites", {x=$x, y=$y, image="$image", count=${emitExpr(count)}, spacing=$spacing, w=$w, h=$h})"""
+
+    case UI.Slots(x, y, size, images, selected, spacing) =>
+      val imgList = images.map(i => s"\"$i\"").mkString(", ")
+      s"""coroutine.yield("uislots", {x=$x, y=$y, size=$size, images={$imgList}, selected=${emitExpr(selected)}, spacing=$spacing})"""
+
+    case UI.Image(x, y, w, h, image, (r,g,b)) =>
+      s"""coroutine.yield("uiimage", {x=$x, y=$y, w=$w, h=$h, image="$image", r=$r, g=$g, b=$b})"""
 
   def emitScript(script: Script, indent: Int = 0): String =
     script.statements

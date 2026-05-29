@@ -1,4 +1,6 @@
-package clove.compiler
+package clove.compiler.runtime
+
+import clove.compiler.{WorldFeatures}
 
 
 object LuaRuntime:
@@ -246,7 +248,7 @@ object LuaRuntime:
        |end""".stripMargin
 
   def dispatchTable(f: WorldFeatures): String =
-    val entries = List(
+    val entries = (List(
       if f.usesGravity  then Some("  gravity  = function(task, er, a, b, c, dt) handleGravity(task, er, dt) end,") else None,
       if f.usesJump     then Some("  jump     = function(task, er, a, b, c, dt) handleJump(task, er, dt) end,") else None,
       if f.usesMove     then Some("  move     = function(task, er, a, b, c, dt) handleMove(task, er, a, b, dt) end,") else None,
@@ -267,12 +269,8 @@ object LuaRuntime:
       if f.usesGlobals   then Some("""|  setglobal = function(task, er, a, b, c, dt) globals[a] = b end,
                                       |  getglobal = function(task, er, a, b, c, dt) return globals[a] end,""".stripMargin) else None,
       if f.usesCamera    then Some("  camera    = function(task, er, a, b, c, dt) camera.follow = task.id end,") else None,
-      if f.usesShowState then Some("""|  showstate = function(task, er, a, b, c, dt)
-                                      |    local e = entities[task.id]
-                                      |    if e and e[a] ~= nil then table.insert(uiDrawList, {label = a, value = e[a]}) end
-                                      |  end,""".stripMargin) else None,
       if f.usesSpawnAt   then Some("  spawnat  = function(task, er, a, b, c, dt) return handleSpawnAt(a, b, c) end,") else None,
-    ).flatten.mkString("\n")
+    ) ++ UIRuntime.dispatchEntries(f)).flatten.mkString("\n")
 
     s"""|local dispatch = {
         |$entries

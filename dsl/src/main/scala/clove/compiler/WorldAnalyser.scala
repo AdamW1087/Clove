@@ -77,7 +77,6 @@ object WorldAnalyser:
       usesMove       = uses { case _: Effect.Move     => true; case _ => false },
       usesCollides   = uses { case _: Effect.Collides => true; case _ => false },
       usesCamera     = uses { case _: Effect.Camera   => true; case _ => false },
-      usesShowState  = uses { case _: Effect.ShowState => true; case _ => false },
       usesGlobals    = world.initialGlobals.nonEmpty ||
                        uses { case _: Effect.GetGlobal => true; case _: Effect.SetGlobal => true; case _ => false },
       usesTriggers   = world.regions.exists { case Region(_, _, _, _, _, _: Behaviour.Trigger, _, _, _) => true; case _ => false },
@@ -92,5 +91,11 @@ object WorldAnalyser:
       usesEntityReads = usesEntityReadsVal,
       usesCrossEntityReads  = uses { case _: Effect.GetStateOf => true; case _ => false },
       usesCrossEntityWrites = uses { case _: Effect.SetStateOf => true; case _ => false },
-      usesSpawnAt           = uses { case _: Effect.SpawnAt => true; case _ => false } || world.templates.nonEmpty
+      usesSpawnAt           = uses { case _: Effect.SpawnAt => true; case _ => false } || world.templates.nonEmpty,
+      usesUI                = uses { case _: UI => true; case _ => false },
+      usesUIBar             = uses { case _: UI.Bar     => true; case _ => false },
+      usesUILabel           = uses { case _: UI.Label   => true; case _ => false },
+      usesUISprites         = uses { case _: UI.Sprites => true; case _ => false },
+      usesUISlots           = uses { case _: UI.Slots   => true; case _ => false },
+      usesUIImage           = uses { case _: UI.Image   => true; case _ => false },
     )

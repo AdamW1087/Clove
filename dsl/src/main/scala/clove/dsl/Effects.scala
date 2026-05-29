@@ -180,16 +180,6 @@ def template(e: Entity)(using b: WorldBuilder): Unit =
 def spawnAt(templateName: String, x: Expr, y: Expr)(using b: ScriptBuilder): Unit =
   perform(Effect.SpawnAt(templateName, x, y))
 
-
-// UI / Debug
-// TODO: draw() planned for UI system
-def draw()(using b: ScriptBuilder): Unit =
-  perform(Effect.Draw())
-
-def showState(key: String)(using b: ScriptBuilder): Unit =
-  perform(Effect.ShowState(key))
-
-
 // Spawn-time configuration
 def setSprite(path: String)(using b: ScriptBuilder): Unit =
   b += Configure(SpawnConfig.SetSprite(path))
@@ -239,8 +229,45 @@ def switchState(stateKey: String, states: (String, ScriptBuilder ?=> Unit)*)(usi
         }
   buildChain(states)
 
-def max(exprs: Expr*): Expr = Expr.Max(exprs*)
-def min(exprs: Expr*): Expr = Expr.Min(exprs*)
+def max(exprs: Expr*): Expr  = Expr.Max(exprs*)
+def min(exprs: Expr*): Expr  = Expr.Min(exprs*)
+def ceil(expr: Expr): Expr   = Expr.Ceil(expr)
+def floor(expr: Expr): Expr  = Expr.Floor(expr)
+
+
+// UI
+
+def uiBar(x: Double, y: Double, w: Double, h: Double,
+          value: Expr, max: Expr,
+          colour:   (Double, Double, Double) = (0.2, 0.8, 0.2),
+          bgColour: (Double, Double, Double) = (0.3, 0.3, 0.3))
+         (using b: ScriptBuilder): Unit =
+  b += Perform(UI.Bar(x, y, w, h, value, max, colour, bgColour))
+
+def uiLabel(x: Double, y: Double, prefix: String,
+            value: Option[Expr] = None,
+            colour: (Double, Double, Double) = (1.0, 1.0, 1.0))
+           (using b: ScriptBuilder): Unit =
+  b += Perform(UI.Label(x, y, prefix, value, colour))
+
+def uiSprites(x: Double, y: Double, image: String,
+              count: Expr,
+              spacing: Double,
+              w: Double, h: Double)
+             (using b: ScriptBuilder): Unit =
+  b += Perform(UI.Sprites(x, y, image, count, spacing, w, h))
+
+def uiSlots(x: Double, y: Double, size: Double,
+            images: List[String], selected: Expr,
+            spacing: Double)
+           (using b: ScriptBuilder): Unit =
+  b += Perform(UI.Slots(x, y, size, images, selected, spacing))
+
+def uiImage(x: Double, y: Double, w: Double, h: Double,
+            image: String,
+            colour: (Double, Double, Double) = (1.0, 1.0, 1.0))
+           (using b: ScriptBuilder): Unit =
+  b += Perform(UI.Image(x, y, w, h, image, colour))
 
 def animRule(name: String, frames: List[Int], fps: Int, flipped: Boolean)(using b: ScriptBuilder): Unit =
   b += Configure(SpawnConfig.AnimRule(name, frames, fps, condition = None, flipped))
