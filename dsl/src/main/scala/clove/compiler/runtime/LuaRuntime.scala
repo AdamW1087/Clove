@@ -1,6 +1,6 @@
 package clove.compiler.runtime
 
-import clove.compiler.{WorldFeatures}
+import clove.compiler.WorldFeatures
 
 
 object LuaRuntime:
@@ -248,29 +248,42 @@ object LuaRuntime:
        |end""".stripMargin
 
   def dispatchTable(f: WorldFeatures): String =
-    val entries = (List(
-      if f.usesGravity  then Some("  gravity  = function(task, er, a, b, c, dt) handleGravity(task, er, dt) end,") else None,
-      if f.usesJump     then Some("  jump     = function(task, er, a, b, c, dt) handleJump(task, er, dt) end,") else None,
-      if f.usesMove     then Some("  move     = function(task, er, a, b, c, dt) handleMove(task, er, a, b, dt) end,") else None,
-      Some("  setsize  = function(task, er, a, b, c, dt) handleSetSize(task, a, b) end,"),
-      if f.usesCollides then Some("  collides = function(task, er, a, b, c, dt) return handleCollides(task, a) end,") else None,
-      Some("""|  setstate = function(task, er, a, b, c, dt)
-              |    if entities[task.id] then entities[task.id][a] = b end
-              |  end,
-              |  getstate = function(task, er, a, b, c, dt)
-              |    if entities[task.id] then return entities[task.id][a] end
-              |  end,
-              |  setstateof = function(task, er, a, b, c, dt)
-              |    if entities[a] then entities[a][b] = c end
-              |  end,
-              |  getstateof = function(task, er, a, b, c, dt)
-              |    return entities[a] and entities[a][b] or nil
-              |  end,""".stripMargin),
-      if f.usesGlobals   then Some("""|  setglobal = function(task, er, a, b, c, dt) globals[a] = b end,
-                                      |  getglobal = function(task, er, a, b, c, dt) return globals[a] end,""".stripMargin) else None,
-      if f.usesCamera    then Some("  camera    = function(task, er, a, b, c, dt) camera.follow = task.id end,") else None,
-      if f.usesSpawnAt   then Some("  spawnat  = function(task, er, a, b, c, dt) return handleSpawnAt(a, b, c) end,") else None,
-    ) ++ UIRuntime.dispatchEntries(f)).flatten.mkString("\n")
+    val builtins = List(
+      f.usesGravity  -> "  gravity  = function(task, er, a, b, c, dt) handleGravity(task, er, dt) end,",
+      f.usesJump     -> "  jump     = function(task, er, a, b, c, dt) handleJump(task, er, dt) end,",
+      f.usesMove     -> "  move     = function(task, er, a, b, c, dt) handleMove(task, er, a, b, dt) end,",
+      true           -> "  setsize  = function(task, er, a, b, c, dt) handleSetSize(task, a, b) end,",
+      f.usesCollides -> "  collides = function(task, er, a, b, c, dt) return handleCollides(task, a) end,",
+      true           -> """|  setstate = function(task, er, a, b, c, dt)
+                           |    local resolved, impl = resolve(task, er, "setstate")
+                           |    if impl then
+                           |      impl(task.id, resolved, dt, a, b)   -- payload: key=a, value=b
+                           |    elseif entities[task.id] then
+                           |      entities[task.id][a] = b
+                           |    end
+                           |  end,
+                           |  getstate = function(task, er, a, b, c, dt)
+                           |    local resolved, impl = resolve(task, er, "getstate")
+                           |    if impl then
+                           |      return impl(task.id, resolved, dt, a)   -- payload: key=a
+                           |    elseif entities[task.id] then
+                           |      return entities[task.id][a]
+                           |    end
+                           |  end,
+                           |  setstateof = function(task, er, a, b, c, dt)
+                           |    if entities[a] then entities[a][b] = c end
+                           |  end,
+                           |  getstateof = function(task, er, a, b, c, dt)
+                           |    return entities[a] and entities[a][b] or nil
+                           |  end,""".stripMargin,
+      f.usesGlobals  -> """|  setglobal = function(task, er, a, b, c, dt) globals[a] = b end,
+                           |  getglobal = function(task, er, a, b, c, dt) return globals[a] end,""".stripMargin,
+      f.usesCamera   -> "  camera    = function(task, er, a, b, c, dt) camera.follow = task.id end,",
+      f.usesSpawnAt  -> "  spawnat  = function(task, er, a, b, c, dt) return handleSpawnAt(a, b, c) end,",
+    )
+    val entries = (builtins ++ UIRuntime.dispatchEntries(f))
+      .collect { case (true, lua) => lua }
+      .mkString("\n")
 
     s"""|local dispatch = {
         |$entries
@@ -375,51 +388,4 @@ object LuaRuntime:
        |  elseif region.visualMode == "sprite" then
        |    love.graphics.draw(img, region.x - camera.x, region.y - camera.y)
        |  end
-       |end""".stripMargin
-
-  // Tag system helpers
-  val tagHelpers: String =
-    """|-- Returns all entity ids that have the given tag
-       |local function findByTag(tag)
-       |  local result = {}
-       |  for id, e in pairs(entities) do
-       |    if e.tags then
-       |      for _, t in ipairs(e.tags) do
-       |        if t == tag then table.insert(result, id); break end
-       |      end
-       |    end
-       |  end
-       |  return result
-       |end
-       |
-       |-- Returns true if the entity with task_id collides with any entity that has the given tag
-       |local function collidesWithTag(e, tag)
-       |  for id, other in pairs(entities) do
-       |    if other.tags then
-       |      for _, t in ipairs(other.tags) do
-       |        if t == tag and checkCollision(e, other) then return true, id end
-       |      end
-       |    end
-       |  end
-       |  return false, nil
-       |end
-       |
-       |-- Returns the id of the nearest entity with the given tag, or nil
-       |local function nearest(fromId, tag)
-       |  local e = entities[fromId]
-       |  if not e then return nil end
-       |  local bestId, bestDist = nil, math.huge
-       |  for id, other in pairs(entities) do
-       |    if id ~= fromId and other.tags then
-       |      for _, t in ipairs(other.tags) do
-       |        if t == tag then
-       |          local dx = (other.x or 0) - (e.x or 0)
-       |          local dy = (other.y or 0) - (e.y or 0)
-       |          local dist = dx*dx + dy*dy
-       |          if dist < bestDist then bestDist = dist; bestId = id end
-       |        end
-       |      end
-       |    end
-       |  end
-       |  return bestId
        |end""".stripMargin

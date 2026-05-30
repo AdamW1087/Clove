@@ -7,8 +7,7 @@ case class Entity(
   name: String,
   spawnScript: Script = Script(List.empty),
   initScript: Script = Script(List.empty),
-  updateScript: Script = Script(List.empty),
-  tags: List[String] = List.empty
+  updateScript: Script = Script(List.empty)
 ):
   // Spawn script for entities
   def onSpawn(body: ScriptBuilder ?=> Unit): Entity =
@@ -21,9 +20,6 @@ case class Entity(
   // Script that the entity will run every frame
   def onUpdate(body: ScriptBuilder ?=> Unit): Entity =
     copy(updateScript = script(body))
-
-  def withTags(ts: String*): Entity =
-    copy(tags = ts.toList)
 
 // Creates a new entity
 def entity(name: String): Entity = Entity(name)

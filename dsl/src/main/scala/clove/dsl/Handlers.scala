@@ -6,30 +6,41 @@ import clove.ast.*
 sealed trait HandlerDirective
 object HandlerDirective:
   case class ValueOnly(key: EffectKey, value: Expr) extends HandlerDirective
-  case class Combined(key: EffectKey, value: Expr, impl: (Expr, Expr) => Script) extends HandlerDirective
+  case class Combined(key: EffectKey, value: Expr, impl: Impl) extends HandlerDirective
+  case class ImplOnly(key: EffectKey, impl: Impl) extends HandlerDirective
 
-// Attaches an impl override to a (key -> value) entry
-// e.g. Jump -> 5.0 via { (value, dt) => script { ... } }
+// Value-effect override: Jump -> 5.0 via { (resolved, dt) => ... }
 extension (entry: (EffectKey, Expr))
   def via(f: (Expr, Expr) => Script): HandlerDirective =
-    HandlerDirective.Combined(entry._1, entry._2, f)
+    val body = f(Expr.Var("resolved"), Expr.Var("dt"))
+    HandlerDirective.Combined(entry._1, entry._2, Impl(body))
 
+// State read override: GetState onGet { (key, dt) => ... }
+extension (key: EffectKey)
+  def onGet(f: (Expr, Expr) => Script): HandlerDirective =
+    val body = f(Expr.Var("key"), Expr.Var("dt"))
+    HandlerDirective.ImplOnly(key, Impl(body, List("key")))
 
-given Conversion[(EffectKey, Double), (EffectKey, Expr)] = (k, v) => (k, Expr.Num(v))
-// Allow plain tuples to be used as handler directives implicitly
-given Conversion[(EffectKey, Expr), HandlerDirective]    = (k, v) => HandlerDirective.ValueOnly(k, v)
-given Conversion[(EffectKey, Double), HandlerDirective]  = (k, v) => HandlerDirective.ValueOnly(k, Expr.Num(v))
-given Conversion[(EffectKey, Boolean), HandlerDirective] = (k, v) => HandlerDirective.ValueOnly(k, Expr.Bool(v))
-given Conversion[(EffectKey, String), HandlerDirective]  = (k, v) => HandlerDirective.ValueOnly(k, Expr.Str(v))
+  // State write override: SetState onSet { (key, value, dt) => ... }
+  def onSet(f: (Expr, Expr, Expr) => Script): HandlerDirective =
+    val body = f(Expr.Var("key"), Expr.Var("value"), Expr.Var("dt"))
+    HandlerDirective.ImplOnly(key, Impl(body, List("key", "value")))
 
-// Splits directives into separate value and impl maps for the Handler
+// Allow plain tuples (Key -> value) to be used as handler directives
+given [K <: EffectKey]: Conversion[(K, Expr), HandlerDirective]    = (k, v) => HandlerDirective.ValueOnly(k, v)
+given [K <: EffectKey]: Conversion[(K, Double), HandlerDirective]  = (k, v) => HandlerDirective.ValueOnly(k, Expr.Num(v))
+given [K <: EffectKey]: Conversion[(K, Boolean), HandlerDirective] = (k, v) => HandlerDirective.ValueOnly(k, Expr.Bool(v))
+given [K <: EffectKey]: Conversion[(K, String), HandlerDirective]  = (k, v) => HandlerDirective.ValueOnly(k, Expr.Str(v))
+
+// Splits directives into value and impl maps
 def createHandler(name: Option[String], directives: Seq[HandlerDirective]): Handler =
   val handles = directives.collect {
     case HandlerDirective.ValueOnly(k, v)   => k.name -> v
     case HandlerDirective.Combined(k, v, _) => k.name -> v
   }.toMap
   val impls = directives.collect {
-    case HandlerDirective.Combined(k, _, f) => k.name -> f
+    case HandlerDirective.Combined(k, _, i) => k.name -> i
+    case HandlerDirective.ImplOnly(k, i)    => k.name -> i
   }.toMap
   Handler(name, handles, impls)
 

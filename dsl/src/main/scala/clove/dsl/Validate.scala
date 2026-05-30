@@ -8,44 +8,64 @@ import clove.ast.*
 private def effectName(e: Effect[?]): String =
   e.getClass.getSimpleName.stripSuffix("$")
 
-// Script trraversal helpers
+// Generic recursive traversal
+private def collectStatements[A](script: Script)(extract: Statement => List[A]): List[A] =
+  script.statements.flatMap { stmt =>
+    val here = extract(stmt)
+    val nested = stmt match
+      case If(_, t)            => collectStatements(t)(extract)
+      case IfElse(_, t, e)     => collectStatements(t)(extract) ++ collectStatements(e)(extract)
+      case HandleWith(_, body) => collectStatements(body)(extract)
+      case _                   => Nil
+    here ++ nested
+  }
+
 private def collectConfigureInUpdate(script: Script): List[String] =
-  script.statements.flatMap {
-    case Configure(c)        => List(c.getClass.getSimpleName.stripSuffix("$"))
-    case If(_, t)            => collectConfigureInUpdate(t)
-    case IfElse(_, t, e)     => collectConfigureInUpdate(t) ++ collectConfigureInUpdate(e)
-    case HandleWith(_, body) => collectConfigureInUpdate(body)
-    case _                   => Nil
+  collectStatements(script) {
+    case Configure(c) => List(c.getClass.getSimpleName.stripSuffix("$"))
+    case _            => Nil
   }
 
 private def collectSpritePaths(script: Script): List[String] =
-  script.statements.flatMap {
+  collectStatements(script) {
     case Configure(SpawnConfig.SetSprite(path))            => List(path)
     case Configure(SpawnConfig.SetSpritesheet(path, _, _)) => List(path)
-    case If(_, t)                                          => collectSpritePaths(t)
-    case IfElse(_, t, e)                                   => collectSpritePaths(t) ++ collectSpritePaths(e)
-    case HandleWith(_, body)                               => collectSpritePaths(body)
     case _                                                 => Nil
   }
 
+private def collectUIImagePaths(script: Script): List[String] =
+  collectStatements(script) {
+    case Perform(UI.Sprites(_, _, image, _, _, _, _)) => List(image)
+    case Perform(UI.Slots(_, _, _, images, _, _))     => images
+    case Perform(UI.Image(_, _, _, _, image, _))      => List(image)
+    case _                                            => Nil
+  }
+
 private def collectQueryNames(script: Script): List[String] =
-  script.statements.flatMap {
+  collectStatements(script) {
     case Bind(_, Effect.UserEffect(name)) => List(name.toLowerCase)
-    case If(_, t)                    => collectQueryNames(t)
-    case IfElse(_, t, e)             => collectQueryNames(t) ++ collectQueryNames(e)
-    case HandleWith(_, body)         => collectQueryNames(body)
-    case _                           => Nil
+    case _                                => Nil
   }
 
 private def collectCustomPerforms(script: Script): List[String] =
-  script.statements.flatMap {
+  collectStatements(script) {
     case Perform(Effect.UserEffect(name)) => List(name.toLowerCase)
-    case If(_, t)                        => collectCustomPerforms(t)
-    case IfElse(_, t, e)                 => collectCustomPerforms(t) ++ collectCustomPerforms(e)
-    case HandleWith(_, body)             => collectCustomPerforms(body)
-    case _                               => Nil
+    case _                                => Nil
   }
 
+private def collectStateDefs(script: Script): List[String] =
+  collectStatements(script) {
+    case Perform(Effect.SetState(key, _)) => List(key)
+    case _                                => Nil
+  }
+
+private def collectStateReads(script: Script): List[String] =
+  collectStatements(script) {
+    case Bind(_, Effect.GetState(key)) => List(key)
+    case _                             => Nil
+  }
+
+// HandleWith needs the handler itself
 private def collectHandlers(script: Script): List[Handler] =
   script.statements.flatMap {
     case HandleWith(h, body) => h :: collectHandlers(body)
@@ -54,6 +74,7 @@ private def collectHandlers(script: Script): List[Handler] =
     case _                   => Nil
   }
 
+// Trigger scripts may only use a restricted effect set
 private def collectIllegalTriggerEffects(script: Script): List[String] =
   script.statements.flatMap {
     case Perform(Effect.SetState(_, _))  => Nil
@@ -76,24 +97,6 @@ private def collectObsGlobals(expr: Expr): List[String] = expr match
   case Expr.Not(e)          => collectObsGlobals(e)
   case _                    => Nil
 
-private def collectStateDefs(script: Script): List[String] =
-  script.statements.flatMap {
-    case Perform(Effect.SetState(key, _)) => List(key)
-    case If(_, t)                         => collectStateDefs(t)
-    case IfElse(_, t, e)                  => collectStateDefs(t) ++ collectStateDefs(e)
-    case HandleWith(_, body)              => collectStateDefs(body)
-    case _                                => Nil
-  }
-
-private def collectStateReads(script: Script): List[String] =
-  script.statements.flatMap {
-    case Bind(_, Effect.GetState(key)) => List(key)
-    case If(_, t)                      => collectStateReads(t)
-    case IfElse(_, t, e)               => collectStateReads(t) ++ collectStateReads(e)
-    case HandleWith(_, body)           => collectStateReads(body)
-    case _                             => Nil
-  }
-
 private def animRuleBeforeSheet(script: Script): Boolean =
   val statements = script.statements
   val sheetIdx = statements.indexWhere {
@@ -107,15 +110,11 @@ private def animRuleBeforeSheet(script: Script): Boolean =
   firstRuleIdx >= 0 && (sheetIdx < 0 || firstRuleIdx < sheetIdx)
 
 private def collectCustomEffectStateKeys(effect: CustomEffect): Set[String] =
-  def fromScript(script: Script): List[String] =
-    script.statements.flatMap {
-      case Bind(_, Effect.GetState(key))    => List(key)
-      case Perform(Effect.SetState(key, _)) => List(key)
-      case If(_, t)                         => fromScript(t)
-      case IfElse(_, t, e)                  => fromScript(t) ++ fromScript(e)
-      case _                                => Nil
-    }
-  fromScript(effect.impl(Expr.Var("resolved"), Expr.Var("dt"))).toSet
+  collectStatements(effect.impl(Expr.Var("resolved"), Expr.Var("dt"))) {
+    case Bind(_, Effect.GetState(key))    => List(key)
+    case Perform(Effect.SetState(key, _)) => List(key)
+    case _                                => Nil
+  }.toSet
 
 // Validation
 def validate(builder: WorldBuilder): Unit =
@@ -153,37 +152,27 @@ def validate(builder: WorldBuilder): Unit =
   require(configInUpdate.isEmpty,
     s"Spawn configuration must be in onSpawn, not onUpdate: ${configInUpdate.mkString(", ")}")
 
-  // Sprite/spritesheet paths must exist on disk
-  val missingSprites = builder.entities
-    .flatMap(e => collectSpritePaths(e.spawnScript))
-    .filterNot(path => os.exists(os.pwd / "src" / "main" / "resources" / os.RelPath(path)))
+  // Resource paths must exist on disk under src/main/resources
+  def missingResources(paths: Seq[String]): List[String] =
+    paths.distinct
+      .filterNot(path => os.exists(os.pwd / "src" / "main" / "resources" / os.RelPath(path)))
+      .toList
+
+  val missingSprites = missingResources(
+    builder.entities.flatMap(e => collectSpritePaths(e.spawnScript)).toSeq
+  )
   require(missingSprites.isEmpty,
     s"Sprite files not found: ${missingSprites.mkString(", ")}")
 
-  def collectUIImagePaths(script: Script): List[String] =
-    script.statements.flatMap {
-      case Perform(UI.Sprites(_, _, image, _, _, _, _)) => List(image)
-      case Perform(UI.Slots(_, _, _, images, _, _))     => images
-      case Perform(UI.Image(_, _, _, _, image, _))      => List(image)
-      case If(_, t)                                     => collectUIImagePaths(t)
-      case IfElse(_, t, e)                              => collectUIImagePaths(t) ++ collectUIImagePaths(e)
-      case HandleWith(_, body)                          => collectUIImagePaths(body)
-      case _                                            => Nil
-    }
-
-  val missingUIImages = builder.entities
-    .flatMap(e => collectUIImagePaths(e.updateScript))
-    .distinct
-    .filterNot(path => os.exists(os.pwd / "src" / "main" / "resources" / os.RelPath(path)))
+  val missingUIImages = missingResources(
+    builder.entities.flatMap(e => collectUIImagePaths(e.updateScript)).toSeq
+  )
   require(missingUIImages.isEmpty,
     s"UI image files not found: ${missingUIImages.mkString(", ")}")
 
-  // Region visual image paths must exist on disk
-  val missingVisuals = builder.regions
-    .flatMap(_.visual)
-    .map(_.path)
-    .distinct
-    .filterNot(path => os.exists(os.pwd / "src" / "main" / "resources" / os.RelPath(path)))
+  val missingVisuals = missingResources(
+    builder.regions.flatMap(_.visual).map(_.path).toSeq
+  )
   require(missingVisuals.isEmpty,
     s"Region visual image files not found: ${missingVisuals.mkString(", ")}")
 
@@ -234,7 +223,7 @@ def validate(builder: WorldBuilder): Unit =
 
   // Custom effect validation
   val registeredNames = builder.customEffects.map(_.name).toSet
-  val builtInKeys = Set("move", "jump", "gravity", "despawn", "draw",
+  val builtInKeys = Set("move", "jump", "gravity", "despawn",
                         "setstate", "getstate", "setglobal", "getglobal", "collides", "camera", "setsize")
   val knownKeys = registeredNames ++ builtInKeys ++ queryNames
 

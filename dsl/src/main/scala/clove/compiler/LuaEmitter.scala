@@ -84,8 +84,8 @@ object LuaEmitter:
         val values = handler.handles.map { (k, v) =>
           s"${k.toLowerCase} = ${emitExpr(v)}"
         }.mkString(", ")
-        val impls = handler.impls.map { (k, f) =>
-          s"${k.toLowerCase}_impl = ${emitImpl(f)}"
+        val impls = handler.impls.map { (k, impl) =>
+          s"${k.toLowerCase}_impl = ${emitImpl(impl)}"
         }.mkString(", ")
         val allFields = List(values, impls).filter(_.nonEmpty).mkString(", ")
         val nameComment = handler.name.map(n => s" -- $n").getOrElse("")
@@ -113,6 +113,9 @@ object LuaEmitter:
     case Effect.UserEffect(name)             => s"coroutine.yield(\"$name\")"
     case Effect.SetSize(w, h)                => s"coroutine.yield(\"setsize\", ${emitExpr(w)}, ${emitExpr(h)})"
     case Effect.SpawnAt(tpl, x, y)           => s"coroutine.yield(\"spawnat\", \"$tpl\", ${emitExpr(x)}, ${emitExpr(y)})"
+
+    case _: Continuation[?] =>
+      sys.error("resumeRead()/resumeWrite() can only be used inside a state handler impl (onGet/onSet)")
 
     // UI effects
     case UI.Bar(x, y, w, h, value, max, (r,g,b), (rb,gb,bb)) =>
@@ -164,10 +167,16 @@ object LuaEmitter:
       case Bind(varName, Effect.GetGlobal(key)) =>
         s"${pad}local $varName = globals[\"$key\"]"
 
+      case Bind(varName, Effect.ResumeRead()) =>
+        s"${pad}local $varName = entities[task_id] and entities[task_id][key]"
+
       case Perform(Effect.SetState(key, v)) =>
         s"${pad}if entities[task_id] then entities[task_id][\"$key\"] = ${emitExpr(v)} end"
       case Perform(Effect.SetGlobal(key, v)) =>
         s"${pad}globals[\"$key\"] = ${emitExpr(v)}"
+
+      case Perform(Effect.ResumeWrite()) =>
+        s"${pad}if entities[task_id] then entities[task_id][key] = value end"
 
       case Perform(Effect.SetSize(w, h)) =>
         s"${pad}if entities[task_id] then entities[task_id][\"width\"] = ${emitExpr(w)}; entities[task_id][\"height\"] = ${emitExpr(h)} end"
@@ -184,7 +193,8 @@ object LuaEmitter:
            |${emitDirectScript(elseBranch, indent + 1)}
            |${pad}end""".stripMargin
 
-      case _ => s"${pad}-- unsupported in direct mode"
+      case other =>
+        sys.error(s"Unsupported statement in direct mode (handler impl / custom effect / trigger): $other")
 
   def emitDirectScript(script: Script, indent: Int = 0): String =
     script.statements
@@ -192,10 +202,13 @@ object LuaEmitter:
       .filter(_.nonEmpty)
       .mkString("\n")
 
-  // Shared impl emitter for handler 'via' overrides and custom effect bodies
-  def emitImpl(f: (Expr, Expr) => Script): String =
-    s"""function(task_id, resolved, dt)
-       |${emitDirectScript(f(Expr.Var("resolved"), Expr.Var("dt")), indent = 1)}
+  // Shared impl emitter
+  def emitImpl(impl: Impl): String =
+    val binding =
+      if impl.payload.isEmpty then ""
+      else s"  local ${impl.payload.mkString(", ")} = ...\n"
+    s"""function(task_id, resolved, dt, ...)
+       |$binding${emitDirectScript(impl.body, indent = 1)}
        |end""".stripMargin
 
   // Spawn script emission

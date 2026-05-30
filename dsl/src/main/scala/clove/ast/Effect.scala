@@ -5,14 +5,16 @@ sealed trait EffectKey:
   def name: String
 
 // Effect keys used in handler(Gravity -> 10.0, Jump -> 5.0, ...)
-object Key:
-  case object Gravity   extends EffectKey { val name = "gravity"   }
-  case object Jump      extends EffectKey { val name = "jump"      }
-  case object Move      extends EffectKey { val name = "move"      }
-  case object Collides  extends EffectKey { val name = "collides"  }
-  case object Camera    extends EffectKey { val name = "camera"    }
-  case object SetSize   extends EffectKey { val name = "setsize"   }
-  case object Despawn   extends EffectKey { val name = "despawn"   }
+enum Key(val name: String) extends EffectKey:
+  case Gravity  extends Key("gravity")
+  case Jump     extends Key("jump")
+  case Move     extends Key("move")
+  case Collides extends Key("collides")
+  case Camera   extends Key("camera")
+  case SetSize  extends Key("setsize")
+  case Despawn  extends Key("despawn")
+  case GetState extends Key("getstate")
+  case SetState extends Key("setstate")
 
 // A user-defined custom effect
 case class CustomEffect(effectName: String, impl: (Expr, Expr) => Script) extends EffectKey:
@@ -27,8 +29,12 @@ case class QueryKey(effectName: String) extends EffectKey:
     b += Bind(varName, Effect.UserEffect[Expr](name))
     Expr.Var(varName)
 
-// Contains all Effects/functions to access and manage state
+// An Effect a script performs, with resumption type R
 sealed trait Effect[+R]
+
+// Continuation, resume an intercepted effect. Only valid inside
+// handler impls (onGet/onSet)
+sealed trait Continuation[+R] extends Effect[R]
 
 object Effect:
   // Unit responses
@@ -54,6 +60,10 @@ object Effect:
 
   // Continuation discarding effect
   case class Despawn() extends Effect[Nothing]
+
+  // Resume the default read/write inside a state handler impl
+  case class ResumeWrite() extends Continuation[Unit]
+  case class ResumeRead()  extends Continuation[Expr]
 
 // UI effects
 sealed trait UI extends Effect[Unit]

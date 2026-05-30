@@ -1,7 +1,7 @@
 package clove.compiler.runtime
 
 import clove.ast.*
-import clove.compiler.{WorldFeatures}
+import clove.compiler.WorldFeatures
 
 object UIRuntime:
 
@@ -14,27 +14,27 @@ object UIRuntime:
     if f.usesUI then "  uiDrawList = {}" else ""
 
   // Dispatch table entries
-  def dispatchEntries(f: WorldFeatures): List[Option[String]] = List(
-    if f.usesUIBar then Some("""|  uibar = function(task, er, a, b, c, dt)
-                                |    a.type = "bar"
-                                |    table.insert(uiDrawList, a)
-                                |  end,""".stripMargin) else None,
-    if f.usesUILabel then Some("""|  uilabel = function(task, er, a, b, c, dt)
-                                  |    a.type = "label"
-                                  |    table.insert(uiDrawList, a)
-                                  |  end,""".stripMargin) else None,
-    if f.usesUISprites then Some("""|  uisprites = function(task, er, a, b, c, dt)
-                                    |    a.type = "sprites"
-                                    |    table.insert(uiDrawList, a)
-                                    |  end,""".stripMargin) else None,
-    if f.usesUISlots then Some("""|  uislots = function(task, er, a, b, c, dt)
-                                  |    a.type = "slots"
-                                  |    table.insert(uiDrawList, a)
-                                  |  end,""".stripMargin) else None,
-    if f.usesUIImage then Some("""|  uiimage = function(task, er, a, b, c, dt)
-                                  |    a.type = "image"
-                                  |    table.insert(uiDrawList, a)
-                                  |  end,""".stripMargin) else None,
+  def dispatchEntries(f: WorldFeatures): List[(Boolean, String)] = List(
+    f.usesUIBar -> """|  uibar = function(task, er, a, b, c, dt)
+                      |    a.type = "bar"
+                      |    table.insert(uiDrawList, a)
+                      |  end,""".stripMargin,
+    f.usesUILabel -> """|  uilabel = function(task, er, a, b, c, dt)
+                        |    a.type = "label"
+                        |    table.insert(uiDrawList, a)
+                        |  end,""".stripMargin,
+    f.usesUISprites -> """|  uisprites = function(task, er, a, b, c, dt)
+                          |    a.type = "sprites"
+                          |    table.insert(uiDrawList, a)
+                          |  end,""".stripMargin,
+    f.usesUISlots -> """|  uislots = function(task, er, a, b, c, dt)
+                        |    a.type = "slots"
+                        |    table.insert(uiDrawList, a)
+                        |  end,""".stripMargin,
+    f.usesUIImage -> """|  uiimage = function(task, er, a, b, c, dt)
+                        |    a.type = "image"
+                        |    table.insert(uiDrawList, a)
+                        |  end,""".stripMargin,
   )
 
   // Render block

@@ -66,6 +66,13 @@ def collides(target: Expr)(using b: ScriptBuilder): Expr =
 def customEffect(name: String)(impl: (Expr, Expr) => Script): CustomEffect =
   CustomEffect(name, impl)
 
+// Resume the underlying operation inside a state handler impl
+def resumeWrite()(using b: ScriptBuilder): Unit =
+  perform(Effect.ResumeWrite())
+
+def resumeRead()(using b: ScriptBuilder): Expr =
+  bind(Effect.ResumeRead())
+
 def register(effects: CustomEffect*)(using b: WorldBuilder): Unit =
   b.addCustomEffects(effects.toList)
 

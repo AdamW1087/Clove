@@ -2,7 +2,7 @@ package clove.compiler.runtime
 
 import clove.ast.*
 import clove.dsl.{Region, Behaviour, Visual, VisualMode, World}
-import clove.compiler.{WorldAnalyser, LuaEmitter}
+import clove.compiler.{LuaEmitter, WorldAnalyser}
 
 object LoveRuntime:
 
@@ -80,7 +80,8 @@ object LoveRuntime:
     }.mkString(",\n")
 
     val effectImpls = world.customEffects.map { e =>
-      s"  ${e.name.toLowerCase} = ${LuaEmitter.emitImpl(e.impl)}"
+      val body = e.impl(Expr.Var("resolved"), Expr.Var("dt"))
+      s"  ${e.name.toLowerCase} = ${LuaEmitter.emitImpl(Impl(body))}"
     }.mkString(",\n")
 
     val templateCoroutines = world.templates.values
@@ -122,7 +123,7 @@ object LoveRuntime:
          |  if not tpl then return end
          |  templateCounts[name] = (templateCounts[name] or 0) + 1
          |  local newId = name .. "_" .. templateCounts[name]
-         |  entities[newId] = {vy = 0, x = x, y = y, tags = {}}
+         |  entities[newId] = {vy = 0, x = x, y = y}
          |  tpl(newId)
          |  if entities[newId].spritePath then
          |    entities[newId].sprite = love.graphics.newImage(entities[newId].spritePath)
@@ -152,8 +153,7 @@ object LoveRuntime:
         .mkString("\n")
 
     val spawnSetup = world.entities.map { e =>
-      val tagsLua = e.tags.map(t => s"\"$t\"").mkString(", ")
-      s"""  entities["${e.name}"] = {vy = 0, tags = {$tagsLua}}
+      s"""  entities["${e.name}"] = {vy = 0}
          |${LuaEmitter.emitSpawnScript(e.name, e.spawnScript)}""".stripMargin
     }.mkString("\n")
 
@@ -238,8 +238,6 @@ $templateSpawnScripts
 
 ${LuaRuntime.utilityFunctions(features)}
 
-${LuaRuntime.tagHelpers}
-
 ${LuaRuntime.resolveFunction}
 
 ${LuaRuntime.resolveDispatchFunction}
@@ -317,10 +315,10 @@ ${if features.usesHandlers then
           local effect_key = effect:lower()
           local resolved, handlerImpl = resolve(task, entityRegions, effect_key)
           if handlerImpl then
-            handlerImpl(task.id, resolved, dt)
+            response = handlerImpl(task.id, resolved, dt, a, b, c)
           else
             local impl = effect_impls[effect_key]
-            if impl then impl(task.id, resolved, dt)
+            if impl then response = impl(task.id, resolved, dt, a, b, c)
             else response = resolved
             end
           end
