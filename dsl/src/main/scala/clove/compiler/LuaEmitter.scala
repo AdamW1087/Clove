@@ -167,16 +167,14 @@ object LuaEmitter:
       case Bind(varName, Effect.GetGlobal(key)) =>
         s"${pad}local $varName = globals[\"$key\"]"
 
-      case Bind(varName, Effect.ResumeRead()) =>
-        s"${pad}local $varName = entities[task_id] and entities[task_id][key]"
-
       case Perform(Effect.SetState(key, v)) =>
         s"${pad}if entities[task_id] then entities[task_id][\"$key\"] = ${emitExpr(v)} end"
       case Perform(Effect.SetGlobal(key, v)) =>
         s"${pad}globals[\"$key\"] = ${emitExpr(v)}"
-
       case Perform(Effect.ResumeWrite()) =>
         s"${pad}if entities[task_id] then entities[task_id][key] = value end"
+      case Perform(Effect.ResumeRead()) =>
+        s"${pad}return entities[task_id] and entities[task_id][key]"
 
       case Perform(Effect.SetSize(w, h)) =>
         s"${pad}if entities[task_id] then entities[task_id][\"width\"] = ${emitExpr(w)}; entities[task_id][\"height\"] = ${emitExpr(h)} end"

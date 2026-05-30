@@ -63,7 +63,7 @@ object Effect:
 
   // Resume the default read/write inside a state handler impl
   case class ResumeWrite() extends Continuation[Unit]
-  case class ResumeRead()  extends Continuation[Expr]
+  case class ResumeRead()  extends Continuation[Unit]
 
 // UI effects
 sealed trait UI extends Effect[Unit]
@@ -96,9 +96,7 @@ object UI:
     h: Double
   ) extends UI
 
-
 //  TO CHECK
-
 
   // Hotbar
   case class Slots(
