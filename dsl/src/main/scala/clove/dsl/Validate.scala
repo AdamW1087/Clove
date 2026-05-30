@@ -33,6 +33,12 @@ private def collectSpritePaths(script: Script): List[String] =
     case _                                                 => Nil
   }
 
+private def collectSoundPaths(script: Script): List[String] =
+  collectStatements(script) {
+    case Perform(Effect.PlaySound(path)) => List(path)
+    case _                               => Nil
+  }
+
 private def collectUIImagePaths(script: Script): List[String] =
   collectStatements(script) {
     case Perform(UI.Sprites(_, _, image, _, _, _, _)) => List(image)
@@ -109,7 +115,7 @@ private def animRuleBeforeSheet(script: Script): Boolean =
   }
   firstRuleIdx >= 0 && (sheetIdx < 0 || firstRuleIdx < sheetIdx)
 
-private def collectCustomEffectStateKeys(effect: CustomEffect): Set[String] =
+private def collectCustomEffectStateKeys(effect: CustomEffect[?]): Set[String] =
   collectStatements(effect.impl(Expr.Var("resolved"), Expr.Var("dt"))) {
     case Bind(_, Effect.GetState(key))    => List(key)
     case Perform(Effect.SetState(key, _)) => List(key)
@@ -175,6 +181,13 @@ def validate(builder: WorldBuilder): Unit =
   )
   require(missingVisuals.isEmpty,
     s"Region visual image files not found: ${missingVisuals.mkString(", ")}")
+
+  val missingSounds = missingResources(
+    builder.entities.flatMap(e =>
+      collectSoundPaths(e.updateScript) ++ collectSoundPaths(e.initScript)).toSeq
+  )
+  require(missingSounds.isEmpty,
+    s"Sound files not found: ${missingSounds.mkString(", ")}")
 
   // AnimRule must appear after SetSpritesheet
   val animWithoutSheet = builder.entities.filter(e => animRuleBeforeSheet(e.spawnScript)).map(_.name)

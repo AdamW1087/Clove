@@ -17,9 +17,9 @@ enum Key(val name: String) extends EffectKey:
   case SetState extends Key("setstate")
 
 // A user-defined custom effect
-case class CustomEffect(effectName: String, impl: (Expr, Expr) => Script) extends EffectKey:
+case class CustomEffect[R](effectName: String, impl: (Expr, Expr) => Script) extends EffectKey:
   val name = effectName.toLowerCase
-  def toEffect: Effect[Unit] = Effect.UserEffect[Unit](name)
+  def toEffect: Effect[R] = Effect.UserEffect[R](name)
 
 // A query effect key
 case class QueryKey(effectName: String) extends EffectKey:
@@ -38,8 +38,6 @@ sealed trait Continuation[+R] extends Effect[R]
 
 object Effect:
   // Unit responses
-  case class Move(dx: Expr, dy: Expr)                               extends Effect[Unit]
-  case class Jump()                                                 extends Effect[Unit]
   case class Gravity()                                              extends Effect[Unit]
   case class SetState(key: String, value: Expr)                     extends Effect[Unit]
   case class SetGlobal(key: String, value: Expr)                    extends Effect[Unit]
@@ -47,8 +45,11 @@ object Effect:
   case class SetStateOf(targetId: String, key: String, value: Expr) extends Effect[Unit]
   case class Camera()                                               extends Effect[Unit]
   case class SpawnAt(templateName: String, x: Expr, y: Expr)        extends Effect[Unit]
+  case class PlaySound(path: String)                                extends Effect[Unit]
 
   // Effects that return an Expr
+  case class Move(dx: Expr, dy: Expr)                  extends Effect[Expr]
+  case class Jump()                                    extends Effect[Expr]
   case class GetState(key: String)                     extends Effect[Expr]
   case class GetGlobal(key: String)                    extends Effect[Expr]
   case class GetStateOf(targetId: String, key: String) extends Effect[Expr]
@@ -65,6 +66,10 @@ object Effect:
   case class ResumeWrite() extends Continuation[Unit]
   case class ResumeRead()  extends Continuation[Unit]
 
+  // Resume the continuation with a value
+  case class ResumeWith(value: Expr) extends Continuation[Unit]
+
+  
 // UI effects
 sealed trait UI extends Effect[Unit]
 

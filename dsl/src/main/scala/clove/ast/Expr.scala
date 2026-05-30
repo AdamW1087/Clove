@@ -18,6 +18,7 @@ enum Expr:
 
   // User input and propagating values in handlers
   case KeyDown(key: String)
+  case JustPressed(key: String)
   case Propagate
 
   // Direct reads (for animRules and Regions respectively)

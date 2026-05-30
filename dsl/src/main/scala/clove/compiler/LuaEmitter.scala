@@ -18,6 +18,7 @@ object LuaEmitter:
     case Expr.Max(exprs*)  => s"math.max(${exprs.map(emitExpr(_, inCondition)).mkString(", ")})"
     case Expr.Min(exprs*)  => s"math.min(${exprs.map(emitExpr(_, inCondition)).mkString(", ")})"
     case Expr.KeyDown(key) => s"love.keyboard.isDown(\"$key\")"
+    case Expr.JustPressed(key) => s"(_justPressed[\"$key\"] == true)"
 
     case Expr.StateRead(key) =>
       if inCondition then s"e[\"$key\"]"
@@ -100,6 +101,7 @@ object LuaEmitter:
   def emitYield(effect: Effect[?]): String = effect match
     case Effect.Move(dx, dy)                 => s"coroutine.yield(\"move\", ${emitExpr(dx)}, ${emitExpr(dy)})"
     case Effect.Jump()                       => s"coroutine.yield(\"jump\")"
+    case Effect.PlaySound(path)              => s"coroutine.yield(\"playsound\", \"$path\")"
     case Effect.Gravity()                    => s"coroutine.yield(\"gravity\")"
     case Effect.Despawn()                    => s"coroutine.yield(\"despawn\")"
     case Effect.SetState(key, v)             => s"coroutine.yield(\"setstate\", \"$key\", ${emitExpr(v)})"
@@ -175,6 +177,8 @@ object LuaEmitter:
         s"${pad}if entities[task_id] then entities[task_id][key] = value end"
       case Perform(Effect.ResumeRead()) =>
         s"${pad}return entities[task_id] and entities[task_id][key]"
+      case Perform(Effect.ResumeWith(v)) =>
+        s"${pad}return ${emitExpr(v)}"
 
       case Perform(Effect.SetSize(w, h)) =>
         s"${pad}if entities[task_id] then entities[task_id][\"width\"] = ${emitExpr(w)}; entities[task_id][\"height\"] = ${emitExpr(h)} end"

@@ -22,4 +22,6 @@ case class WorldFeatures(
   usesUISprites:         Boolean,
   usesUISlots:           Boolean,
   usesUIImage:           Boolean,
+  usesJustPressed:       Boolean,
+  usesSound:             Boolean,
 )

@@ -8,7 +8,7 @@ object WorldAnalyser:
   def analyse(world: World): WorldFeatures =
 
     // Collect every script in the world for effect scanning
-    val entityScripts = world.entities.flatMap(e => List(e.spawnScript, e.updateScript))
+    val entityScripts = world.entities.flatMap(e => List(e.spawnScript, e.initScript, e.updateScript))
     val triggerScripts = world.regions.flatMap {
       case Region(_, _, _, _, _, Behaviour.Trigger(onEnter, onExit), _, _, _) => List(onEnter, onExit)
       case _ => Nil
@@ -16,7 +16,29 @@ object WorldAnalyser:
     val customEffectScripts = world.customEffects.map { e =>
       e.impl(Expr.Var("resolved"), Expr.Var("dt"))
     }
-    val allScripts = entityScripts ++ triggerScripts ++ customEffectScripts
+
+    // Handler impl bodies
+    def implBodies(handlers: Iterable[Handler]): List[Script] =
+      handlers.flatMap(_.impls.values).map(_.body).toList
+
+    def handlersInScript(script: Script): List[Handler] =
+      script.statements.flatMap {
+        case HandleWith(h, body) => h :: handlersInScript(body)
+        case If(_, t)            => handlersInScript(t)
+        case IfElse(_, t, e)     => handlersInScript(t) ++ handlersInScript(e)
+        case _                   => Nil
+      }
+
+    val allHandlers =
+      world.defaultHandlers ++
+      world.regions.collect {
+        case Region(_, _, _, _, _, Behaviour.Basic(hs), _, _, _) => hs
+      }.flatten ++
+      entityScripts.flatMap(handlersInScript)
+
+    val handlerImplScripts = implBodies(allHandlers)
+
+    val allScripts = entityScripts ++ triggerScripts ++ customEffectScripts ++ handlerImplScripts
 
     // Recursively collect all effects from a script
     def collectEffects(script: Script): List[Effect[?]] =
@@ -43,27 +65,38 @@ object WorldAnalyser:
 
     def uses(p: Effect[?] => Boolean): Boolean = allEffects.exists(p)
 
-    def scanExpr(expr: Expr): Boolean = expr match
-      case Expr.EntityRead(_, _) => true
-      case Expr.EntityExists(_)  => true
-      case Expr.BinOp(_, l, r)   => scanExpr(l) || scanExpr(r)
-      case Expr.Not(e)           => scanExpr(e)
-      case _                     => false
+    def scanExpr(p: Expr => Boolean)(expr: Expr): Boolean =
+      p(expr) || (expr match
+        case Expr.BinOp(_, l, r) => scanExpr(p)(l) || scanExpr(p)(r)
+        case Expr.Not(e)         => scanExpr(p)(e)
+        case _                   => false)
 
-    def scanScript(script: Script): Boolean =
+    def scanScript(p: Expr => Boolean)(script: Script): Boolean =
       script.statements.exists {
-        case If(cond, t)         => scanExpr(cond) || scanScript(t)
-        case IfElse(cond, t, el) => scanExpr(cond) || scanScript(t) || scanScript(el)
-        case HandleWith(_, body) => scanScript(body)
+        case If(cond, t)         => scanExpr(p)(cond) || scanScript(p)(t)
+        case IfElse(cond, t, el) => scanExpr(p)(cond) || scanScript(p)(t) || scanScript(p)(el)
+        case HandleWith(_, body) => scanScript(p)(body)
         case _                   => false
       }
 
-    val usesEntityReadsVal = world.entities.exists(e =>
-      scanScript(e.updateScript) || scanScript(e.spawnScript)
-    )
+    val isEntityRead: Expr => Boolean =
+      case Expr.EntityRead(_, _) => true
+      case Expr.EntityExists(_)  => true
+      case _                     => false
+
+    val isJustPressed: Expr => Boolean =
+      case Expr.JustPressed(_) => true
+      case _                   => false
+
+    def anyScript(p: Expr => Boolean): Boolean =
+      world.entities.exists(e =>
+        scanScript(p)(e.updateScript) || scanScript(p)(e.spawnScript) || scanScript(p)(e.initScript)
+      )
+
+    val usesEntityReadsVal = anyScript(isEntityRead)
 
     val hasHandleWithInScripts = world.entities.exists { e =>
-      hasHandleWith(e.updateScript) || hasHandleWith(e.spawnScript)
+      hasHandleWith(e.updateScript) || hasHandleWith(e.spawnScript) || hasHandleWith(e.initScript)
     }
     val hasBasicRegionHandlers = world.regions.exists {
       case Region(_, _, _, _, _, Behaviour.Basic(handlers), _, _, _) =>
@@ -98,4 +131,6 @@ object WorldAnalyser:
       usesUISprites         = uses { case _: UI.Sprites => true; case _ => false },
       usesUISlots           = uses { case _: UI.Slots   => true; case _ => false },
       usesUIImage           = uses { case _: UI.Image   => true; case _ => false },
+      usesJustPressed       = anyScript(isJustPressed),
+      usesSound             = uses { case _: Effect.PlaySound => true; case _ => false },
     )

@@ -3,12 +3,20 @@ import clove.dsl.WorldBuilder
 
 import clove.ast.*
 
-// Performs an effect, discarding the return value
+
+// Performs an Effect with no return
 def perform(effect: Effect[Unit])(using b: ScriptBuilder): Unit =
   b += Perform(effect)
 
-// Perform wrapper for custom effects
-def perform(effect: CustomEffect)(using b: ScriptBuilder): Unit =
+// Performs an effect that resumes with a value
+def perform(effect: Effect[Expr])(using b: ScriptBuilder): Expr =
+  bind(effect)
+
+
+def perform(effect: CustomEffect[Unit])(using b: ScriptBuilder): Unit =
+  perform(effect.toEffect)
+
+def perform(effect: CustomEffect[Expr])(using b: ScriptBuilder): Expr =
   perform(effect.toEffect)
 
 // Binds the return value of an effect that resumes with Expr
@@ -19,11 +27,11 @@ def bind(effect: Effect[Expr])(using b: ScriptBuilder): Expr =
 
 
 // Physics effects
-def move(dx: Double, dy: Double)(using b: ScriptBuilder): Unit =
+def move(dx: Double, dy: Double)(using b: ScriptBuilder): Expr =
   perform(Effect.Move(Expr.Num(dx), Expr.Num(dy)))
 
-def jump()(using b: ScriptBuilder): Unit =
-  perform(Effect.Jump())
+def playSound(path: String)(using b: ScriptBuilder): Unit =
+  perform(Effect.PlaySound(path))
 
 def despawn()(using b: ScriptBuilder): Unit =
   b += Discard(Effect.Despawn())
@@ -62,18 +70,27 @@ def queryKey(name: String): QueryKey = QueryKey(name)
 def collides(target: Expr)(using b: ScriptBuilder): Expr =
   bind(Effect.Collides(target))
 
-// CustomEffect is both an Effect (for perform) and an EffectKey (for handlers)
-def customEffect(name: String)(impl: (Expr, Expr) => Script): CustomEffect =
-  CustomEffect(name, impl)
+// Custom effect whose impl resumes Unit
+def customEffect(name: String)(impl: (Expr, Expr) => Script): CustomEffect[Unit] =
+  CustomEffect[Unit](name, impl)
+
+// Custom effect whose impl resumes with a value via resumeWith
+def customValueEffect(name: String)(impl: (Expr, Expr) => Script): CustomEffect[Expr] =
+  CustomEffect[Expr](name, impl)
 
 // Resume the underlying operation inside a state handler impl
 def resumeWrite()(using b: ScriptBuilder): Unit =
-  perform(Effect.ResumeWrite())
+  b += Perform(Effect.ResumeWrite())
 
+// Resume the default read
 def resumeRead()(using b: ScriptBuilder): Unit =
-  perform(Effect.ResumeRead())
+  b += Perform(Effect.ResumeRead())
 
-def register(effects: CustomEffect*)(using b: WorldBuilder): Unit =
+// Resume the continuation with a value
+def resumeWith(value: Expr)(using b: ScriptBuilder): Unit =
+  b += Perform(Effect.ResumeWith(value))
+
+def register(effects: CustomEffect[?]*)(using b: WorldBuilder): Unit =
   b.addCustomEffects(effects.toList)
 
 
@@ -94,6 +111,9 @@ def whenElse(cond: Expr)(thenBody: ScriptBuilder ?=> Unit)(elseBody: ScriptBuild
 // Input
 def keyDown(key: String): Expr =
   Expr.KeyDown(key)
+
+def justPressed(key: String): Expr =
+  Expr.JustPressed(key)
 
 
 val deltaTime: Expr = Expr.DeltaTime

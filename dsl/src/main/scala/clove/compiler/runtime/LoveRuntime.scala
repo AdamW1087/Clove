@@ -229,6 +229,8 @@ $regionTable
 
 _clove_dt = nil
 
+${if features.usesJustPressed then "local _justPressed = {}" else ""}
+${if features.usesSound then "local _sounds = {}" else ""}
 ${UIRuntime.drawListDecl(features)}
 ${if features.usesTriggers  then "local prevOverlap = {}" else ""}
 ${if features.usesVisuals || features.usesUI then "local images = {}" else ""}
@@ -239,6 +241,24 @@ $templateSpawnScripts
 ${LuaRuntime.utilityFunctions(features)}
 
 ${LuaRuntime.resolveFunction}
+
+${if features.usesSound then
+  """|-- Cache sources by path
+     |local function playSound(path)
+     |  local src = _sounds[path]
+     |  if not src then
+     |    src = love.audio.newSource(path, "static")
+     |    _sounds[path] = src
+     |  end
+     |  src:clone():play()
+     |end""".stripMargin
+  else ""}
+
+${if features.usesJustPressed then
+  """|function love.keypressed(key)
+     |  _justPressed[key] = true
+     |end""".stripMargin
+  else ""}
 
 ${LuaRuntime.resolveDispatchFunction}
 
@@ -358,6 +378,7 @@ ${if features.usesCamera then
       table.remove(tasks, i)
     end
   end
+${if features.usesJustPressed then "  _justPressed = {}" else ""}
 end
 
 function love.draw()

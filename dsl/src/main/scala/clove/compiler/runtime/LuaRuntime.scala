@@ -112,8 +112,8 @@ object LuaRuntime:
   val resolveDispatchFunction: String =
     """|local function resolveDispatch(task, entityRegions, key, dt, default)
        |  local resolved, impl = resolve(task, entityRegions, key)
-       |  if impl then impl(task.id, resolved, dt)
-       |  elseif default then default(resolved)
+       |  if impl then return impl(task.id, resolved, dt)
+       |  elseif default then return default(resolved)
        |  end
        |end""".stripMargin
 
@@ -169,9 +169,13 @@ object LuaRuntime:
 
     val jump = if f.usesJump then
       """|local function handleJump(task, entityRegions, dt)
-         |  resolveDispatch(task, entityRegions, "jump", dt, function(resolved)
+         |  return resolveDispatch(task, entityRegions, "jump", dt, function(resolved)
          |    local e = entities[task.id]
-         |    if e and e.grounded then e.vy = -resolved; e.grounded = false end
+         |    if e and e.grounded then
+         |      e.vy = -resolved; e.grounded = false
+         |      return true
+         |    end
+         |    return false
          |  end)
          |end
          |""".stripMargin
@@ -196,14 +200,16 @@ object LuaRuntime:
          |end
          |
          |local function handleMove(task, entityRegions, a, b, dt)
-         |  resolveDispatch(task, entityRegions, "move", dt, function(resolved)
+         |  return resolveDispatch(task, entityRegions, "move", dt, function(resolved)
          |    local e = entities[task.id]
-         |    if not e then return end
+         |    if not e then return false end
+         |    local startX, startY = e.x, e.y
          |    local dx = a * dt
          |    local dy = b * dt
          |    if resolved then dx = dx * resolved; dy = dy * resolved end
          |    e.x = e.x + dx; resolveSolidCollision(e, "x", dx)
          |    e.y = e.y + dy; resolveSolidCollision(e, "y", dy)
+         |    return e.x ~= startX or e.y ~= startY
          |  end)
          |end
          |""".stripMargin
@@ -249,11 +255,12 @@ object LuaRuntime:
 
   def dispatchTable(f: WorldFeatures): String =
     val builtins = List(
-      f.usesGravity  -> "  gravity  = function(task, er, a, b, c, dt) handleGravity(task, er, dt) end,",
-      f.usesJump     -> "  jump     = function(task, er, a, b, c, dt) handleJump(task, er, dt) end,",
-      f.usesMove     -> "  move     = function(task, er, a, b, c, dt) handleMove(task, er, a, b, dt) end,",
-      true           -> "  setsize  = function(task, er, a, b, c, dt) handleSetSize(task, a, b) end,",
-      f.usesCollides -> "  collides = function(task, er, a, b, c, dt) return handleCollides(task, a) end,",
+      f.usesGravity  -> "  gravity   = function(task, er, a, b, c, dt) handleGravity(task, er, dt) end,",
+      f.usesJump     -> "  jump      = function(task, er, a, b, c, dt) return handleJump(task, er, dt) end,",
+      f.usesMove     -> "  move      = function(task, er, a, b, c, dt) return handleMove(task, er, a, b, dt) end,",
+      f.usesSound    -> "  playsound = function(task, er, a, b, c, dt) playSound(a) end,",
+      true           -> "  setsize   = function(task, er, a, b, c, dt) handleSetSize(task, a, b) end,",
+      f.usesCollides -> "  collides  = function(task, er, a, b, c, dt) return handleCollides(task, a) end,",
       true           -> """|  setstate = function(task, er, a, b, c, dt)
                            |    local resolved, impl = resolve(task, er, "setstate")
                            |    if impl then
