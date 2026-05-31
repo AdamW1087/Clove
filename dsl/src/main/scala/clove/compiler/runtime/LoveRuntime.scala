@@ -231,7 +231,7 @@ _clove_dt = nil
 
 ${if features.usesJustPressed then "local _justPressed = {}" else ""}
 ${if features.usesSound then "local _sounds = {}" else ""}
-${if features.usesMusic then "local _currentMusic = nil\nlocal _musicSource = nil" else ""}
+${if features.usesMusic then "local MUSIC_FADE = 1.0\nlocal _currentTrack = nil\nlocal _musicCurrent = nil\nlocal _musicPrevious = nil\nlocal _fadeProgress = 0" else ""}
 ${UIRuntime.drawListDecl(features)}
 ${if features.usesTriggers  then "local prevOverlap = {}" else ""}
 ${if features.usesVisuals || features.usesUI then "local images = {}" else ""}
@@ -266,6 +266,8 @@ ${LuaRuntime.resolveDispatchFunction}
 ${LuaRuntime.builtinHandlers(features)}
 
 ${LuaRuntime.setSize}
+
+${if features.usesMusic then LuaRuntime.musicUpdate else ""}
 
 ${LuaRuntime.dispatchTable(features)}
 
@@ -380,6 +382,7 @@ ${if features.usesCamera then
     end
   end
 ${if features.usesJustPressed then "  _justPressed = {}" else ""}
+${if features.usesMusic then "  updateMusic(dt)" else ""}
 end
 
 function love.draw()

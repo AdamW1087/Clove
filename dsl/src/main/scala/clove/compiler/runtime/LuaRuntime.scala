@@ -253,6 +253,21 @@ object LuaRuntime:
        |  if e then e.width = a; e.height = b end
        |end""".stripMargin
 
+  // Per frame crossfade
+  val musicUpdate: String =
+    """|local function updateMusic(dt)
+       |  if _fadeProgress < MUSIC_FADE then
+       |    _fadeProgress = math.min(_fadeProgress + dt, MUSIC_FADE)
+       |    local t = _fadeProgress / MUSIC_FADE
+       |    if _musicCurrent then _musicCurrent:setVolume(t) end
+       |    if _musicPrevious then _musicPrevious:setVolume(1 - t) end
+       |    if _fadeProgress >= MUSIC_FADE and _musicPrevious then
+       |      love.audio.stop(_musicPrevious)
+       |      _musicPrevious = nil
+       |    end
+       |  end
+       |end""".stripMargin
+
   def dispatchTable(f: WorldFeatures): String =
     val builtins = List(
       f.usesGravity  -> "  gravity  = function(task, er, a, b, c, dt) handleGravity(task, er, dt) end,",
@@ -261,16 +276,19 @@ object LuaRuntime:
       f.usesSound    -> "  playsound = function(task, er, a, b, c, dt) playSound(a) end,",
       f.usesMusic    -> """|  music = function(task, er, a, b, c, dt)
                            |    local track = resolve(task, er, "music")
-                           |    if track ~= _currentMusic then
-                           |      if _musicSource then love.audio.stop(_musicSource) end
-                           |      _currentMusic = track
+                           |    if track ~= _currentTrack then
+                           |      if _musicPrevious then love.audio.stop(_musicPrevious) end
+                           |      _musicPrevious = _musicCurrent
+                           |      _currentTrack = track
                            |      if track then
-                           |        _musicSource = love.audio.newSource(track, "stream")
-                           |        _musicSource:setLooping(true)
-                           |        love.audio.play(_musicSource)
+                           |        _musicCurrent = love.audio.newSource(track, "stream")
+                           |        _musicCurrent:setLooping(true)
+                           |        _musicCurrent:setVolume(0)
+                           |        love.audio.play(_musicCurrent)
                            |      else
-                           |        _musicSource = nil
+                           |        _musicCurrent = nil
                            |      end
+                           |      _fadeProgress = 0
                            |    end
                            |  end,""".stripMargin,
       true           -> "  setsize  = function(task, er, a, b, c, dt) handleSetSize(task, a, b) end,",
