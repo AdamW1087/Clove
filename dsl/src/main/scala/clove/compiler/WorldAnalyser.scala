@@ -133,4 +133,5 @@ object WorldAnalyser:
       usesUIImage           = uses { case _: UI.Image   => true; case _ => false },
       usesJustPressed       = anyScript(isJustPressed),
       usesSound             = uses { case _: Effect.PlaySound => true; case _ => false },
+      usesMusic             = uses { case _: Effect.Music => true; case _ => false },
     )

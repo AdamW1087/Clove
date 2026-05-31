@@ -231,6 +231,7 @@ _clove_dt = nil
 
 ${if features.usesJustPressed then "local _justPressed = {}" else ""}
 ${if features.usesSound then "local _sounds = {}" else ""}
+${if features.usesMusic then "local _currentMusic = nil\nlocal _musicSource = nil" else ""}
 ${UIRuntime.drawListDecl(features)}
 ${if features.usesTriggers  then "local prevOverlap = {}" else ""}
 ${if features.usesVisuals || features.usesUI then "local images = {}" else ""}

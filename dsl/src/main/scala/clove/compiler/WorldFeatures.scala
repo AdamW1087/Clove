@@ -24,4 +24,5 @@ case class WorldFeatures(
   usesUIImage:           Boolean,
   usesJustPressed:       Boolean,
   usesSound:             Boolean,
+  usesMusic:             Boolean,
 )

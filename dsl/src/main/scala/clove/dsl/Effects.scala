@@ -33,6 +33,10 @@ def move(dx: Double, dy: Double)(using b: ScriptBuilder): Expr =
 def playSound(path: String)(using b: ScriptBuilder): Unit =
   perform(Effect.PlaySound(path))
 
+// Performs the music effect
+def music()(using b: ScriptBuilder): Unit =
+  perform(Effect.Music())
+
 def despawn()(using b: ScriptBuilder): Unit =
   b += Discard(Effect.Despawn())
 

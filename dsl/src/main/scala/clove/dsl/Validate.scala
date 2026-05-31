@@ -189,6 +189,23 @@ def validate(builder: WorldBuilder): Unit =
   require(missingSounds.isEmpty,
     s"Sound files not found: ${missingSounds.mkString(", ")}")
 
+  // Music paths live in handler values not in scripts
+  val allHandlersForMusic =
+    builder.defaultHandlers ++
+    builder.regions.flatMap {
+      case Region(_, _, _, _, _, Behaviour.Basic(handlers), _, _, _) => handlers
+      case _ => Nil
+    } ++
+    builder.entities.flatMap(e => collectHandlers(e.updateScript) ++ collectHandlers(e.spawnScript))
+
+  val missingMusic = missingResources(
+    allHandlersForMusic.flatMap(_.handles.get("music")).collect {
+      case Expr.Str(path) => path
+    }.toSeq
+  )
+  require(missingMusic.isEmpty,
+    s"Music files not found: ${missingMusic.mkString(", ")}")
+
   // AnimRule must appear after SetSpritesheet
   val animWithoutSheet = builder.entities.filter(e => animRuleBeforeSheet(e.spawnScript)).map(_.name)
   require(animWithoutSheet.isEmpty,
@@ -236,7 +253,7 @@ def validate(builder: WorldBuilder): Unit =
 
   // Custom effect validation
   val registeredNames = builder.customEffects.map(_.name).toSet
-  val builtInKeys = Set("move", "jump", "gravity", "despawn",
+  val builtInKeys = Set("move", "jump", "gravity", "despawn", "music",
                         "setstate", "getstate", "setglobal", "getglobal", "collides", "camera", "setsize")
   val knownKeys = registeredNames ++ builtInKeys ++ queryNames
 

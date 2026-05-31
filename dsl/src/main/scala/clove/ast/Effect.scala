@@ -9,6 +9,7 @@ enum Key(val name: String) extends EffectKey:
   case Gravity  extends Key("gravity")
   case Jump     extends Key("jump")
   case Move     extends Key("move")
+  case Music    extends Key("music")
   case Collides extends Key("collides")
   case Camera   extends Key("camera")
   case SetSize  extends Key("setsize")
@@ -44,6 +45,7 @@ object Effect:
   case class SetSize(width: Expr, height: Expr)                     extends Effect[Unit]
   case class SetStateOf(targetId: String, key: String, value: Expr) extends Effect[Unit]
   case class Camera()                                               extends Effect[Unit]
+  case class Music()                                                extends Effect[Unit]
   case class SpawnAt(templateName: String, x: Expr, y: Expr)        extends Effect[Unit]
   case class PlaySound(path: String)                                extends Effect[Unit]
 
@@ -69,7 +71,7 @@ object Effect:
   // Resume the continuation with a value
   case class ResumeWith(value: Expr) extends Continuation[Unit]
 
-  
+
 // UI effects
 sealed trait UI extends Effect[Unit]
 

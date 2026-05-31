@@ -1,6 +1,7 @@
 package clove.dsl
 
 import clove.ast.*
+import scala.annotation.targetName
 
 // A handler entry can be a value only, or a value with an impl override
 sealed trait HandlerDirective
@@ -10,10 +11,27 @@ object HandlerDirective:
   case class ImplOnly(key: EffectKey, impl: Impl) extends HandlerDirective
 
 // Value-effect override: Jump -> 5.0 via { (resolved, dt) => ... }
-extension (entry: (EffectKey, Expr))
+extension [K <: EffectKey](entry: (K, Expr))
   def via(f: (Expr, Expr) => Script): HandlerDirective =
     val body = f(Expr.Var("resolved"), Expr.Var("dt"))
     HandlerDirective.Combined(entry._1, entry._2, Impl(body))
+
+
+// Allow via from a primitive
+extension [K <: EffectKey](entry: (K, Double))
+  @targetName("viaDouble")
+  def via(f: (Expr, Expr) => Script): HandlerDirective =
+    (entry._1, Expr.Num(entry._2): Expr).via(f)
+
+extension [K <: EffectKey](entry: (K, Boolean))
+  @targetName("viaBoolean")
+  def via(f: (Expr, Expr) => Script): HandlerDirective =
+    (entry._1, Expr.Bool(entry._2): Expr).via(f)
+
+extension [K <: EffectKey](entry: (K, String))
+  @targetName("viaString")
+  def via(f: (Expr, Expr) => Script): HandlerDirective =
+    (entry._1, Expr.Str(entry._2): Expr).via(f)
 
 // State read override: GetState onGet { (key, dt) => ... }
 extension (key: EffectKey)

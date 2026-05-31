@@ -255,12 +255,26 @@ object LuaRuntime:
 
   def dispatchTable(f: WorldFeatures): String =
     val builtins = List(
-      f.usesGravity  -> "  gravity   = function(task, er, a, b, c, dt) handleGravity(task, er, dt) end,",
-      f.usesJump     -> "  jump      = function(task, er, a, b, c, dt) return handleJump(task, er, dt) end,",
-      f.usesMove     -> "  move      = function(task, er, a, b, c, dt) return handleMove(task, er, a, b, dt) end,",
+      f.usesGravity  -> "  gravity  = function(task, er, a, b, c, dt) handleGravity(task, er, dt) end,",
+      f.usesJump     -> "  jump     = function(task, er, a, b, c, dt) return handleJump(task, er, dt) end,",
+      f.usesMove     -> "  move     = function(task, er, a, b, c, dt) return handleMove(task, er, a, b, dt) end,",
       f.usesSound    -> "  playsound = function(task, er, a, b, c, dt) playSound(a) end,",
-      true           -> "  setsize   = function(task, er, a, b, c, dt) handleSetSize(task, a, b) end,",
-      f.usesCollides -> "  collides  = function(task, er, a, b, c, dt) return handleCollides(task, a) end,",
+      f.usesMusic    -> """|  music = function(task, er, a, b, c, dt)
+                           |    local track = resolve(task, er, "music")
+                           |    if track ~= _currentMusic then
+                           |      if _musicSource then love.audio.stop(_musicSource) end
+                           |      _currentMusic = track
+                           |      if track then
+                           |        _musicSource = love.audio.newSource(track, "stream")
+                           |        _musicSource:setLooping(true)
+                           |        love.audio.play(_musicSource)
+                           |      else
+                           |        _musicSource = nil
+                           |      end
+                           |    end
+                           |  end,""".stripMargin,
+      true           -> "  setsize  = function(task, er, a, b, c, dt) handleSetSize(task, a, b) end,",
+      f.usesCollides -> "  collides = function(task, er, a, b, c, dt) return handleCollides(task, a) end,",
       true           -> """|  setstate = function(task, er, a, b, c, dt)
                            |    local resolved, impl = resolve(task, er, "setstate")
                            |    if impl then
