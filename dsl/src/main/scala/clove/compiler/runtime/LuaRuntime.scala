@@ -317,7 +317,8 @@ object LuaRuntime:
                            |  end,""".stripMargin,
       f.usesGlobals  -> """|  setglobal = function(task, er, a, b, c, dt) globals[a] = b end,
                            |  getglobal = function(task, er, a, b, c, dt) return globals[a] end,""".stripMargin,
-      f.usesCamera   -> "  camera    = function(task, er, a, b, c, dt) camera.follow = task.id end,",
+      f.usesCamera   -> "  camera    = function(task, er, a, b, c, dt) camera.target = task.id end,",
+      f.usesCamera   -> "  setcamera = function(task, er, a, b, c, dt) camera.target = a end,",
       f.usesSpawnAt  -> "  spawnat  = function(task, er, a, b, c, dt) return handleSpawnAt(a, b, c) end,",
     )
     val entries = (builtins ++ UIRuntime.dispatchEntries(f))

@@ -112,6 +112,7 @@ object LuaEmitter:
     case Effect.GetStateOf(targetId, key)    => s"coroutine.yield(\"getstateof\", \"$targetId\", \"$key\")"
     case Effect.Collides(target)             => s"coroutine.yield(\"collides\", ${emitExprAsString(target)})"
     case Effect.Camera()                     => s"coroutine.yield(\"camera\")"
+    case Effect.SetCamera(target)            => s"coroutine.yield(\"setcamera\", \"$target\")"
     case Effect.Music()                      => s"coroutine.yield(\"music\")"
     case Effect.UserEffect(name)             => s"coroutine.yield(\"$name\")"
     case Effect.SetSize(w, h)                => s"coroutine.yield(\"setsize\", ${emitExpr(w)}, ${emitExpr(h)})"

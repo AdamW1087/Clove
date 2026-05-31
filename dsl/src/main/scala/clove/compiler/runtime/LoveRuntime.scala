@@ -214,7 +214,7 @@ object LoveRuntime:
 $hotReloadBlock
 local entities = {}
 local tasks    = {}
-${if features.usesCamera  then "local camera = {x = 0, y = 0, follow = nil, threshold = 400}" else ""}
+${if features.usesCamera  then "local camera = {x = 0, y = 0, target = nil}" else ""}
 ${if features.usesGravity then s"local GROUND = $groundLevel" else ""}
 
 ${if features.usesGlobals then s"local globals = {\n$globalsTable\n}" else ""}
@@ -364,10 +364,12 @@ ${if features.usesHandlers then
 ${if features.usesAnimations then LuaRuntime.animUpdate else ""}
 ${if features.usesTriggers   then "  handleTriggers()" else ""}
 ${if features.usesCamera then
-    """|  if camera.follow then
-       |    local followed = entities[camera.follow]
-       |    if followed and followed.x > camera.threshold then
-       |      camera.x = followed.x - camera.threshold
+    """|  if camera.target then
+       |    local followed = entities[camera.target]
+       |    if followed then
+       |      local sw, sh = love.graphics.getWidth(), love.graphics.getHeight()
+       |      camera.x = followed.x + (followed.width or 0) / 2 - sw / 2
+       |      camera.y = followed.y + (followed.height or 0) / 2 - sh / 2
        |    end
        |  end""".stripMargin
   else ""}

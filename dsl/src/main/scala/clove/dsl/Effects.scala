@@ -199,8 +199,13 @@ def triggerable(id: String, x: Double, y: Double, w: Double, h: Double,
       when(didCollide)(despawn())
     }
 */
-def camera()(using b: ScriptBuilder): Unit =
+// Follow the entity running this script
+def setCamera()(using b: ScriptBuilder): Unit =
   perform(Effect.Camera())
+
+// Follow a named entity
+def setCamera(entity: Entity)(using b: ScriptBuilder): Unit =
+  perform(Effect.SetCamera(entity.name))
 
 
 // Register an entity as a spawnable template

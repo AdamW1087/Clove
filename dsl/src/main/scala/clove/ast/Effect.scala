@@ -44,7 +44,10 @@ object Effect:
   case class SetGlobal(key: String, value: Expr)                    extends Effect[Unit]
   case class SetSize(width: Expr, height: Expr)                     extends Effect[Unit]
   case class SetStateOf(targetId: String, key: String, value: Expr) extends Effect[Unit]
+
+  // Todo: maybe look into modifying how the camera sits (e.g. zoom)
   case class Camera()                                               extends Effect[Unit]
+  case class SetCamera(target: String)                              extends Effect[Unit]
   case class Music()                                                extends Effect[Unit]
   case class SpawnAt(templateName: String, x: Expr, y: Expr)        extends Effect[Unit]
   case class PlaySound(path: String)                                extends Effect[Unit]

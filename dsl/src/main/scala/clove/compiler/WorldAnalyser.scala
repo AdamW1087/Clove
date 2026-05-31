@@ -109,7 +109,7 @@ object WorldAnalyser:
       usesJump       = uses { case _: Effect.Jump     => true; case _ => false },
       usesMove       = uses { case _: Effect.Move     => true; case _ => false },
       usesCollides   = uses { case _: Effect.Collides => true; case _ => false },
-      usesCamera     = uses { case _: Effect.Camera   => true; case _ => false },
+      usesCamera     = uses { case _: Effect.Camera => true; case _: Effect.SetCamera => true; case _ => false },
       usesGlobals    = world.initialGlobals.nonEmpty ||
                        uses { case _: Effect.GetGlobal => true; case _: Effect.SetGlobal => true; case _ => false },
       usesTriggers   = world.regions.exists { case Region(_, _, _, _, _, _: Behaviour.Trigger, _, _, _) => true; case _ => false },
