@@ -3,12 +3,12 @@ package clove.dsl
 import clove.ast.*
 import scala.annotation.targetName
 
-// A handler entry can be a value only, or a value with an impl override
+// A handler entry can be a value only, an impl override only, or both
 sealed trait HandlerDirective
 object HandlerDirective:
   case class ValueOnly(key: EffectKey, value: Expr) extends HandlerDirective
-  case class Combined(key: EffectKey, value: Expr, impl: Impl) extends HandlerDirective
   case class ImplOnly(key: EffectKey, impl: Impl) extends HandlerDirective
+  case class Combined(key: EffectKey, value: Expr, impl: Impl) extends HandlerDirective
 
 // Value-effect override: Jump -> 5.0 via { (resolved, dt) => ... }
 extension [K <: EffectKey](entry: (K, Expr))
@@ -67,10 +67,3 @@ def handler(directives: HandlerDirective*): Handler =
 
 def handler(name: String, directives: HandlerDirective*): Handler =
   createHandler(Some(name), directives)
-
-// Convenience constructors
-def gravityHandler(strength: Double, name: Option[String] = None): Handler =
-  createHandler(name, Seq(HandlerDirective.ValueOnly(Key.Gravity, Expr.Num(strength))))
-
-def moveHandler(speed: Double, name: Option[String] = None): Handler =
-  createHandler(name, Seq(HandlerDirective.ValueOnly(Key.Move, Expr.Num(speed))))

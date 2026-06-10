@@ -73,24 +73,20 @@ private def collectStateReads(script: Script): List[String] =
 
 // HandleWith needs the handler itself
 private def collectHandlers(script: Script): List[Handler] =
-  script.statements.flatMap {
-    case HandleWith(h, body) => h :: collectHandlers(body)
-    case If(_, t)            => collectHandlers(t)
-    case IfElse(_, t, e)     => collectHandlers(t) ++ collectHandlers(e)
-    case _                   => Nil
+  collectStatements(script) {
+    case HandleWith(h, _) => List(h)
+    case _                => Nil
   }
 
 // Trigger scripts may only use a restricted effect set
 private def collectIllegalTriggerEffects(script: Script): List[String] =
-  script.statements.flatMap {
+  collectStatements(script) {
     case Perform(Effect.SetState(_, _))  => Nil
     case Perform(Effect.SetGlobal(_, _)) => Nil
     case Perform(Effect.SetSize(_, _))   => Nil
     case Bind(_, Effect.GetState(_))     => Nil
     case Bind(_, Effect.GetGlobal(_))    => Nil
     case Perform(_: UI)                  => List("UI effects cannot be used in trigger scripts")
-    case If(_, t)                        => collectIllegalTriggerEffects(t)
-    case IfElse(_, t, e)                 => collectIllegalTriggerEffects(t) ++ collectIllegalTriggerEffects(e)
     case Perform(e)                      => List(effectName(e))
     case Bind(_, e)                      => List(effectName(e))
     case Discard(e)                      => List(effectName(e))
