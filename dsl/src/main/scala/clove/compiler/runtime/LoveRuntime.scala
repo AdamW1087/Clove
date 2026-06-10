@@ -227,7 +227,7 @@ local regions = {
 $regionTable
 }
 
-_clove_dt = nil
+local _clove_dt = nil
 
 ${if features.usesJustPressed then "local _justPressed = {}" else ""}
 ${if features.usesSound then "local _sounds = {}" else ""}
