@@ -125,7 +125,7 @@ object LuaRuntime:
          |    if not e or not resolved then return end
          |
          |    e.vy = (e.vy or 0) + resolved * dt
-         |    e.y  = e.y + e.vy
+         |    e.y  = e.y + e.vy * dt
          |
          |    -- Solid collision (vertical)
          |    for _, region in ipairs(regions) do
@@ -225,27 +225,7 @@ object LuaRuntime:
          |""".stripMargin
     else ""
 
-    val triggers = if f.usesTriggers then
-      """|local function handleTriggers()
-         |  for id, e in pairs(entities) do
-         |    if not prevOverlap[id] then prevOverlap[id] = {} end
-         |    for _, region in ipairs(regions) do
-         |      if region.type == "trigger" and regionActive(region) then
-         |        local rid       = region.id
-         |        local isInside  = insideRegion(e, region)
-         |        local wasInside = prevOverlap[id][rid] or false
-         |        if isInside and not wasInside then region.onEnter(id, globals)
-         |        elseif not isInside and wasInside then region.onExit(id, globals)
-         |        end
-         |        prevOverlap[id][rid] = isInside
-         |      end
-         |    end
-         |  end
-         |end
-         |""".stripMargin
-    else ""
-
-    s"$gravity$jump$move$collides$triggers"
+    s"$gravity$jump$move$collides"
 
   val setSize: String =
     """|local function handleSetSize(task, a, b)

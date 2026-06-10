@@ -60,13 +60,6 @@ object LoveRuntime:
         case Behaviour.Solid(oneWay) =>
           s"  {$commonFields, type = \"solid\", oneWay = $oneWay}"
 
-        case Behaviour.Trigger(onEnter, onExit) =>
-          val enterLua = LuaEmitter.emitTriggerScript(onEnter)
-          val exitLua  = LuaEmitter.emitTriggerScript(onExit)
-          s"""  {$commonFields, type = "trigger",
-             |   onEnter = function(task_id, globals) $enterLua end,
-             |   onExit  = function(task_id, globals) $exitLua end}""".stripMargin
-
     }.mkString(",\n")
 
     val globalsTable = world.initialGlobals.map { (k, v) =>
@@ -233,7 +226,6 @@ ${if features.usesJustPressed then "local _justPressed = {}" else ""}
 ${if features.usesSound then "local _sounds = {}" else ""}
 ${if features.usesMusic then "local MUSIC_FADE = 1.0\nlocal _currentTrack = nil\nlocal _musicCurrent = nil\nlocal _musicPrevious = nil\nlocal _fadeProgress = 0" else ""}
 ${UIRuntime.drawListDecl(features)}
-${if features.usesTriggers  then "local prevOverlap = {}" else ""}
 ${if features.usesVisuals || features.usesUI then "local images = {}" else ""}
 
 $templateSpawnScripts
@@ -362,7 +354,6 @@ ${if features.usesHandlers then
   end
 
 ${if features.usesAnimations then LuaRuntime.animUpdate else ""}
-${if features.usesTriggers   then "  handleTriggers()" else ""}
 ${if features.usesCamera then
     """|  if camera.target then
        |    local followed = entities[camera.target]

@@ -43,15 +43,3 @@ def platform(id: String, x: Double, y: Double, w: Double, h: Double,
              visual: Option[Visual] = None)
             (using b: WorldBuilder): Unit =
   b.addRegion(Region(id, x, y, w, h, Behaviour.Solid(oneWay), condition, colour, visual))
-
-// A region that runs scripts when an entity enters or exits it
-// i believe this behaviour can be mimicked by query keys? leaving a redundancy
-def triggerable(id: String, x: Double, y: Double, w: Double, h: Double,
-                colour: Option[(Double, Double, Double)] = None,
-                condition: Option[Expr] = None,
-                visual: Option[Visual] = None,
-                onEnter: ScriptBuilder ?=> Unit = (_: ScriptBuilder) ?=> (),
-                onExit:  ScriptBuilder ?=> Unit = (_: ScriptBuilder) ?=> ())
-               (using b: WorldBuilder): Unit =
-  b.addRegion(Region(id, x, y, w, h,
-    Behaviour.Trigger(script(onEnter), script(onExit)), condition, colour, visual))

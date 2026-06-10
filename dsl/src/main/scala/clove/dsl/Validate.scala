@@ -78,21 +78,6 @@ private def collectHandlers(script: Script): List[Handler] =
     case _                => Nil
   }
 
-// Trigger scripts may only use a restricted effect set
-private def collectIllegalTriggerEffects(script: Script): List[String] =
-  collectStatements(script) {
-    case Perform(Effect.SetState(_, _))  => Nil
-    case Perform(Effect.SetGlobal(_, _)) => Nil
-    case Perform(Effect.SetSize(_, _))   => Nil
-    case Bind(_, Effect.GetState(_))     => Nil
-    case Bind(_, Effect.GetGlobal(_))    => Nil
-    case Perform(_: UI)                  => List("UI effects cannot be used in trigger scripts")
-    case Perform(e)                      => List(effectName(e))
-    case Bind(_, e)                      => List(effectName(e))
-    case Discard(e)                      => List(effectName(e))
-    case _                               => Nil
-  }
-
 private def collectObsGlobals(expr: Expr): List[String] = expr match
   case Expr.GlobalRead(key) => List(key)
   case Expr.BinOp(_, l, r)  => collectObsGlobals(l) ++ collectObsGlobals(r)
@@ -228,16 +213,6 @@ def validate(builder: WorldBuilder): Unit =
   val duplicateRegions = regionIds.groupBy(identity).filter(_._2.size > 1).keys
   require(duplicateRegions.isEmpty,
     s"Duplicate region ids: ${duplicateRegions.mkString(", ")}")
-
-  // Trigger scripts may only use a restricted set of effects
-  val illegalTriggerEffects = builder.regions.flatMap {
-    case Region(id, _, _, _, _, Behaviour.Trigger(onEnter, onExit), _, _, _) =>
-      val bad = collectIllegalTriggerEffects(onEnter) ++ collectIllegalTriggerEffects(onExit)
-      bad.map(e => s"${id}: $e")
-    case _ => Nil
-  }
-  require(illegalTriggerEffects.isEmpty,
-    s"Trigger scripts may only use setState/getState/setGlobal/getGlobal: ${illegalTriggerEffects.mkString(", ")}")
 
   // obsGlobal keys must be declared in the world globals
   val globalKeys = builder.globals.keySet

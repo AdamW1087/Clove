@@ -8,7 +8,6 @@ case class WorldFeatures(
   usesCollides:    Boolean,
   usesCamera:      Boolean,
   usesGlobals:     Boolean,
-  usesTriggers:    Boolean,
   usesAnimations:  Boolean,
   usesHandlers:    Boolean,
   usesVisuals:     Boolean,

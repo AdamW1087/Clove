@@ -98,25 +98,33 @@ object LuaEmitter:
         else
           s"""${pad}coroutine.yield("pushhandler", {$allFields})$nameComment"""
 
+  // Emit a coroutine.yield call. effect name followed by args
+  private def yieldCall(name: String, args: String*): String =
+    if args.isEmpty then s"coroutine.yield(\"$name\")"
+    else s"coroutine.yield(\"$name\", ${args.mkString(", ")})"
+
+  // Wrap a string to Lua string literal
+  private def quote(s: String): String = "\"" + s + "\""
+
   def emitYield(effect: Effect[?]): String = effect match
-    case Effect.Move(dx, dy)                 => s"coroutine.yield(\"move\", ${emitExpr(dx)}, ${emitExpr(dy)})"
-    case Effect.Jump()                       => s"coroutine.yield(\"jump\")"
-    case Effect.PlaySound(path)              => s"coroutine.yield(\"playsound\", \"$path\")"
-    case Effect.Gravity()                    => s"coroutine.yield(\"gravity\")"
-    case Effect.Despawn()                    => s"coroutine.yield(\"despawn\")"
-    case Effect.SetState(key, v)             => s"coroutine.yield(\"setstate\", \"$key\", ${emitExpr(v)})"
-    case Effect.GetState(key)                => s"coroutine.yield(\"getstate\", \"$key\")"
-    case Effect.SetGlobal(key, v)            => s"coroutine.yield(\"setglobal\", \"$key\", ${emitExpr(v)})"
-    case Effect.GetGlobal(key)               => s"coroutine.yield(\"getglobal\", \"$key\")"
-    case Effect.SetStateOf(targetId, key, v) => s"coroutine.yield(\"setstateof\", \"$targetId\", \"$key\", ${emitExpr(v)})"
-    case Effect.GetStateOf(targetId, key)    => s"coroutine.yield(\"getstateof\", \"$targetId\", \"$key\")"
-    case Effect.Collides(target)             => s"coroutine.yield(\"collides\", ${emitExprAsString(target)})"
-    case Effect.Camera()                     => s"coroutine.yield(\"camera\")"
-    case Effect.SetCamera(target)            => s"coroutine.yield(\"setcamera\", \"$target\")"
-    case Effect.Music()                      => s"coroutine.yield(\"music\")"
-    case Effect.UserEffect(name)             => s"coroutine.yield(\"$name\")"
-    case Effect.SetSize(w, h)                => s"coroutine.yield(\"setsize\", ${emitExpr(w)}, ${emitExpr(h)})"
-    case Effect.SpawnAt(tpl, x, y)           => s"coroutine.yield(\"spawnat\", \"$tpl\", ${emitExpr(x)}, ${emitExpr(y)})"
+    case Effect.Move(dx, dy)                 => yieldCall("move", emitExpr(dx), emitExpr(dy))
+    case Effect.Jump()                       => yieldCall("jump")
+    case Effect.PlaySound(path)              => yieldCall("playsound", quote(path))
+    case Effect.Gravity()                    => yieldCall("gravity")
+    case Effect.Despawn()                    => yieldCall("despawn")
+    case Effect.SetState(key, v)             => yieldCall("setstate", quote(key), emitExpr(v))
+    case Effect.GetState(key)                => yieldCall("getstate", quote(key))
+    case Effect.SetGlobal(key, v)            => yieldCall("setglobal", quote(key), emitExpr(v))
+    case Effect.GetGlobal(key)               => yieldCall("getglobal", quote(key))
+    case Effect.SetStateOf(targetId, key, v) => yieldCall("setstateof", quote(targetId), quote(key), emitExpr(v))
+    case Effect.GetStateOf(targetId, key)    => yieldCall("getstateof", quote(targetId), quote(key))
+    case Effect.Collides(target)             => yieldCall("collides", emitExprAsString(target))
+    case Effect.Camera()                     => yieldCall("camera")
+    case Effect.SetCamera(target)            => yieldCall("setcamera", quote(target))
+    case Effect.Music()                      => yieldCall("music")
+    case Effect.UserEffect(name)             => yieldCall(name)
+    case Effect.SetSize(w, h)                => yieldCall("setsize", emitExpr(w), emitExpr(h))
+    case Effect.SpawnAt(tpl, x, y)           => yieldCall("spawnat", quote(tpl), emitExpr(x), emitExpr(y))
 
     case _: Continuation[?] =>
       sys.error("resumeRead()/resumeWrite() can only be used inside a state handler impl (onGet/onSet)")
@@ -159,10 +167,10 @@ object LuaEmitter:
     s"""coroutine.create(function()
        |  -- init script for $entityId
        |  local task_id = "$entityId"
-       |${emitScript(script, indent = 1)}
+       |${emitScript(script, indent = 2)}
        |end)""".stripMargin
 
-  // Direct mode emission (for custom effects, handler impls, trigger scripts)
+  // Direct mode emission (for custom effects, handler impls)
   def emitDirectStatement(stmt: Statement, indent: Int): String =
     val pad = "  " * indent
     stmt match
@@ -198,7 +206,7 @@ object LuaEmitter:
            |${pad}end""".stripMargin
 
       case other =>
-        sys.error(s"Unsupported statement in direct mode (handler impl / custom effect / trigger): $other")
+        sys.error(s"Unsupported statement in direct mode (handler impl / custom effect): $other")
 
   def emitDirectScript(script: Script, indent: Int = 0): String =
     script.statements
@@ -246,8 +254,3 @@ object LuaEmitter:
 
       case _ => ""
     }.filter(_.nonEmpty).mkString("\n")
-
-  // Trigger scripts run as inline lambdas inside the region table
-  def emitTriggerScript(script: Script): String =
-    if script.statements.isEmpty then ""
-    else emitDirectScript(script).replace("\n", "; ")

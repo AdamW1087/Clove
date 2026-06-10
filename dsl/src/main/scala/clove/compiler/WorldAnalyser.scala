@@ -9,10 +9,7 @@ object WorldAnalyser:
 
     // Collect every script in the world for effect scanning
     val entityScripts = world.entities.flatMap(e => List(e.spawnScript, e.initScript, e.updateScript))
-    val triggerScripts = world.regions.flatMap {
-      case Region(_, _, _, _, _, Behaviour.Trigger(onEnter, onExit), _, _, _) => List(onEnter, onExit)
-      case _ => Nil
-    }
+
     val customEffectScripts = world.customEffects.map { e =>
       e.impl(Expr.Var("resolved"), Expr.Var("dt"))
     }
@@ -38,7 +35,7 @@ object WorldAnalyser:
 
     val handlerImplScripts = implBodies(allHandlers)
 
-    val allScripts = entityScripts ++ triggerScripts ++ customEffectScripts ++ handlerImplScripts
+    val allScripts = entityScripts ++ customEffectScripts ++ handlerImplScripts
 
     // Recursively collect all effects from a script
     def collectEffects(script: Script): List[Effect[?]] =
@@ -74,7 +71,7 @@ object WorldAnalyser:
     def scanScript(p: Expr => Boolean)(script: Script): Boolean =
       script.statements.exists {
         case If(cond, t)         => scanExpr(p)(cond) || scanScript(p)(t)
-        case IfElse(cond, t, el) => scanExpr(p)(cond) || scanScript(p)(t) || scanScript(p)(el)
+        case IfElse(cond, t, e) => scanExpr(p)(cond) || scanScript(p)(t) || scanScript(p)(e)
         case HandleWith(_, body) => scanScript(p)(body)
         case _                   => false
       }
@@ -98,6 +95,7 @@ object WorldAnalyser:
     val hasHandleWithInScripts = world.entities.exists { e =>
       hasHandleWith(e.updateScript) || hasHandleWith(e.spawnScript) || hasHandleWith(e.initScript)
     }
+
     val hasBasicRegionHandlers = world.regions.exists {
       case Region(_, _, _, _, _, Behaviour.Basic(handlers), _, _, _) =>
         handlers.exists(h => h.handles.nonEmpty || h.impls.nonEmpty)
@@ -112,7 +110,6 @@ object WorldAnalyser:
       usesCamera     = uses { case _: Effect.Camera => true; case _: Effect.SetCamera => true; case _ => false },
       usesGlobals    = world.initialGlobals.nonEmpty ||
                        uses { case _: Effect.GetGlobal => true; case _: Effect.SetGlobal => true; case _ => false },
-      usesTriggers   = world.regions.exists { case Region(_, _, _, _, _, _: Behaviour.Trigger, _, _, _) => true; case _ => false },
       usesAnimations = world.entities.exists(e =>
         e.spawnScript.statements.exists {
           case Configure(SpawnConfig.SetSpritesheet(_, _, _)) => true
