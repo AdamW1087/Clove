@@ -122,6 +122,12 @@ private def collectCustomEffectStateKeys(effect: CustomEffect[?]): Set[String] =
     case _                                => Nil
   }.toSet
 
+private def containsPropagation(expr: Expr): Boolean = expr match
+  case Expr.Propagate        => true
+  case Expr.BinOp(_, l, r)   => containsPropagation(l) || containsPropagation(r)
+  case Expr.Negate(e)        => containsPropagation(e)
+  case _                     => false
+
 // Validation
 def validate(builder: WorldBuilder): Unit =
 
@@ -146,6 +152,12 @@ def validate(builder: WorldBuilder): Unit =
     .map(_.name)
   require(missingSize.isEmpty,
     s"Entities missing setSize: ${missingSize.mkString(", ")}")
+
+  val propagatingDefaults = builder.defaultHandlers.flatMap { h =>
+    h.handles.filter((_, v) => containsPropagation(v)).keys
+  }
+  require(propagatingDefaults.isEmpty,
+    s"Default handlers must not propagate. The following do: ${propagatingDefaults.mkString(", ")}")
 
   val missingTemplateSize = builder.templates.values
     .filterNot(e => hasSetSize(e.spawnScript) || hasSetSize(e.updateScript))
@@ -225,7 +237,7 @@ def validate(builder: WorldBuilder): Unit =
   val illegalTriggerEffects = builder.regions.flatMap {
     case Region(id, _, _, _, _, Behaviour.Trigger(onEnter, onExit), _, _, _) =>
       val bad = collectIllegalTriggerEffects(onEnter) ++ collectIllegalTriggerEffects(onExit)
-      bad.map(e => s"${id.getOrElse("unnamed trigger")}: $e")
+      bad.map(e => s"${id}: $e")
     case _ => Nil
   }
   require(illegalTriggerEffects.isEmpty,

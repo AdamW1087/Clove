@@ -11,3 +11,5 @@ case class Visual(
   mode: VisualMode,
   tileSize: Option[(Double, Double)] = None // None = use natural dimensions
 )
+
+given Conversion[(Double, Double, Double), Option[(Double, Double, Double)]] = Some(_)

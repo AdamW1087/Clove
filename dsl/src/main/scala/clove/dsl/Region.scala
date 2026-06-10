@@ -20,7 +20,7 @@ object Behaviour:
 
 
 case class Region(
-  id: Option[String],
+  id: String,
   x: Double, y: Double, w: Double, h: Double,
   behaviour: Behaviour,
   condition: Option[Expr] = None,

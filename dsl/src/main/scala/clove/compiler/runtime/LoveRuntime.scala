@@ -18,7 +18,7 @@ object LoveRuntime:
 
     // Emission helpers
     val regionTable = world.regions.zipWithIndex.map { (r, idx) =>
-      val idStr = r.id.map(id => s"\"$id\"").getOrElse(s"\"region_$idx\"")
+      val idStr = s"\"${r.id}\""
 
       val condStr = r.condition match
         case None       => "nil"
