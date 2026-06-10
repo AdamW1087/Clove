@@ -3,21 +3,13 @@ package clove.compiler.runtime
 import clove.ast.*
 import clove.dsl.{Region, Behaviour, Visual, VisualMode, World}
 import clove.compiler.{LuaEmitter, WorldAnalyser}
+import clove.compiler.WorldFeatures
 
 object LoveRuntime:
 
-  val groundLevel = 600
-
-  def wrap(world: World, hotReload: Boolean = false): String =
-    val features = WorldAnalyser.analyse(world)
-
-    val visualImagePaths = world.regions
-      .flatMap(_.visual)
-      .map(_.path)
-      .distinct
-
-    // Emission helpers
-    val regionTable = world.regions.zipWithIndex.map { (r, idx) =>
+  // The region table
+  private def emitRegionTable(world: World): String =
+    world.regions.zipWithIndex.map { (r, idx) =>
       val idStr = s"\"${r.id}\""
 
       val condStr = r.condition match
@@ -62,27 +54,27 @@ object LoveRuntime:
 
     }.mkString(",\n")
 
-    val globalsTable = world.initialGlobals.map { (k, v) =>
+  private def emitGlobalsTable(world: World): String =
+    world.initialGlobals.map { (k, v) =>
       s"  [\"$k\"] = ${LuaEmitter.emitExpr(v)}"
     }.mkString(",\n")
 
-    val defaultHandlerTable = world.defaultHandlers.map { h =>
+  private def emitDefaultHandlerTable(world: World): String =
+    world.defaultHandlers.map { h =>
       val values = h.handles.map { (k, v) => s"  ${k.toLowerCase} = ${LuaEmitter.emitExpr(v)}" }
       val impls = h.impls.map { (k, f) => s"  ${k.toLowerCase}_impl = ${LuaEmitter.emitImpl(f)}" }
       (values ++ impls).mkString(",\n")
     }.mkString(",\n")
 
-    val effectImpls = world.customEffects.map { e =>
+  private def emitEffectImpls(world: World): String =
+    world.customEffects.map { e =>
       val body = e.impl(Expr.Var("resolved"), Expr.Var("dt"))
       s"  ${e.name.toLowerCase} = ${LuaEmitter.emitImpl(Impl(body))}"
     }.mkString(",\n")
 
-    val templateCoroutines = world.templates.values
-      .filter(_.updateScript.statements.nonEmpty)
-      .map { e => s"local ${e.name}Template = ${LuaEmitter.emitCoroutine(e.name, e.updateScript)}" }
-      .mkString("\n")
-
-    val templateSpawnScripts = if world.templates.isEmpty then "" else
+  // Template definitions, init/update scripts, and the runtime spawn helper,
+  private def emitTemplateSpawnScripts(world: World): String =
+    if world.templates.isEmpty then "" else
       val defs = world.templates.values.map { e =>
         s"""  ["${e.name}"] = function(id)\n${LuaEmitter.emitSpawnScript(e.name, e.spawnScript).replace(s""""${e.name}"""", "id")}\n  end"""
       }.mkString(",\n")
@@ -130,27 +122,30 @@ object LoveRuntime:
          |  end
          |end""".stripMargin
 
-    // Store all coroutines
-    val coroutines =
-      "local _scripts = {}\n" +
-      world.entities
-        .filter(_.updateScript.statements.nonEmpty)
-        .map { e => s"""_scripts["${e.name}"] = ${LuaEmitter.emitCoroutine(e.name, e.updateScript)}""" }
-        .mkString("\n")
+  // Per entity update coroutines
+  private def emitCoroutines(world: World): String =
+    "local _scripts = {}\n" +
+    world.entities
+      .filter(_.updateScript.statements.nonEmpty)
+      .map { e => s"""_scripts["${e.name}"] = ${LuaEmitter.emitCoroutine(e.name, e.updateScript)}""" }
+      .mkString("\n")
 
-    val initCoroutines =
-      "local _initScripts = {}\n" +
-      world.entities
-        .filter(_.initScript.statements.nonEmpty)
-        .map { e => s"""_initScripts["${e.name}"] = ${LuaEmitter.emitInitCoroutine(e.name, e.initScript)}""" }
-        .mkString("\n")
+  // Per entity init coroutines
+  private def emitInitCoroutines(world: World): String =
+    "local _initScripts = {}\n" +
+    world.entities
+      .filter(_.initScript.statements.nonEmpty)
+      .map { e => s"""_initScripts["${e.name}"] = ${LuaEmitter.emitInitCoroutine(e.name, e.initScript)}""" }
+      .mkString("\n")
 
-    val spawnSetup = world.entities.map { e =>
+  private def emitSpawnSetup(world: World): String =
+    world.entities.map { e =>
       s"""  entities["${e.name}"] = {vy = 0}
          |${LuaEmitter.emitSpawnScript(e.name, e.spawnScript)}""".stripMargin
     }.mkString("\n")
 
-    val taskSetup = world.entities.map { e =>
+  private def emitTaskSetup(world: World): String =
+    world.entities.map { e =>
       val hasInit = e.initScript.statements.nonEmpty
       val hasUpdate = e.updateScript.statements.nonEmpty
       (hasInit, hasUpdate) match
@@ -164,42 +159,60 @@ object LoveRuntime:
           ""
     }.filter(_.nonEmpty).mkString("\n")
 
-    def collectUIImagePaths(script: Script): List[String] =
-      script.statements.flatMap {
-        case Perform(UI.Sprites(_, _, image, _, _, _, _)) => List(image)
-        case Perform(UI.Slots(_, _, _, images, _, _))     => images
-        case Perform(UI.Image(_, _, _, _, image, _))      => List(image)
-        case If(_, t)                                     => collectUIImagePaths(t)
-        case IfElse(_, t, e)                              => collectUIImagePaths(t) ++ collectUIImagePaths(e)
-        case HandleWith(_, body)                          => collectUIImagePaths(body)
-        case _                                            => Nil
-      }
+  private def collectUIImagePaths(script: Script): List[String] =
+    script.statements.flatMap {
+      case Perform(UI.Sprites(_, _, image, _, _, _, _)) => List(image)
+      case Perform(UI.Slots(_, _, _, images, _, _))     => images
+      case Perform(UI.Image(_, _, _, _, image, _))      => List(image)
+      case If(_, t)                                     => collectUIImagePaths(t)
+      case IfElse(_, t, e)                              => collectUIImagePaths(t) ++ collectUIImagePaths(e)
+      case HandleWith(_, body)                          => collectUIImagePaths(body)
+      case _                                            => Nil
+    }
 
-    val uiImagePaths = world.entities
-      .flatMap(e => collectUIImagePaths(e.updateScript))
-      .distinct
+  // Image cache loader for region visuals and UI images
+  private def emitVisualCacheLoad(world: World, features: WorldFeatures): String =
+    val visualImagePaths = world.regions.flatMap(_.visual).map(_.path).distinct
+    val uiImagePaths     = world.entities.flatMap(e => collectUIImagePaths(e.updateScript)).distinct
+    val allImagePaths    = (visualImagePaths ++ uiImagePaths).distinct
 
-    val allImagePaths = (visualImagePaths ++ uiImagePaths).distinct
-
-    val visualCacheLoad = if features.usesVisuals || features.usesUI then
+    if features.usesVisuals || features.usesUI then
       val cacheEntries = allImagePaths.map { path =>
         s"  images[\"$path\"] = love.graphics.newImage(\"$path\")"
       }.mkString("\n")
       s"  -- Image cache (region visuals + UI)\n$cacheEntries"
     else ""
 
-    val hotReloadBlock = if hotReload then
+  private def emitHotReloadBlock(hotReload: Boolean): String =
+    if hotReload then
       """|local _lastModified = love.filesystem.getInfo("main.lua") and love.filesystem.getInfo("main.lua").modtime or 0
          |""".stripMargin
     else ""
 
-    val hotReloadCheck = if hotReload then
+  private def emitHotReloadCheck(hotReload: Boolean): String =
+    if hotReload then
       """|  local info = love.filesystem.getInfo("main.lua")
          |  if info and info.modtime ~= _lastModified then love.event.quit("restart") end
          |""".stripMargin
     else ""
 
-    // Generated Lua
+
+  def wrap(world: World, hotReload: Boolean = false): String =
+    val features = WorldAnalyser.analyse(world)
+
+    val regionTable          = emitRegionTable(world)
+    val globalsTable         = emitGlobalsTable(world)
+    val defaultHandlerTable  = emitDefaultHandlerTable(world)
+    val effectImpls          = emitEffectImpls(world)
+    val templateSpawnScripts = emitTemplateSpawnScripts(world)
+    val coroutines           = emitCoroutines(world)
+    val initCoroutines       = emitInitCoroutines(world)
+    val spawnSetup           = emitSpawnSetup(world)
+    val taskSetup            = emitTaskSetup(world)
+    val visualCacheLoad      = emitVisualCacheLoad(world, features)
+    val hotReloadBlock       = emitHotReloadBlock(hotReload)
+    val hotReloadCheck       = emitHotReloadCheck(hotReload)
+
     val cx = if features.usesCamera then "camera.x" else "0"
     val cy = if features.usesCamera then "camera.y" else "0"
 
@@ -208,7 +221,6 @@ $hotReloadBlock
 local entities = {}
 local tasks    = {}
 ${if features.usesCamera  then "local camera = {x = 0, y = 0, target = nil}" else ""}
-${if features.usesGravity then s"local GROUND = $groundLevel" else ""}
 
 ${if features.usesGlobals then s"local globals = {\n$globalsTable\n}" else ""}
 

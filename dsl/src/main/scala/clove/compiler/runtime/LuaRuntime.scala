@@ -146,8 +146,8 @@ object LuaRuntime:
          |    end
          |
          |    -- Ground floor
-         |    if e.y + e.height >= GROUND then
-         |      e.y = GROUND - e.height; e.vy = 0; e.grounded = true
+         |    if e.y + e.height >= love.graphics.getHeight() then
+         |      e.y = love.graphics.getHeight() - e.height; e.vy = 0; e.grounded = true
          |    elseif e.y <= 0 then
          |      e.y = 0; e.vy = 0
          |    else
