@@ -131,12 +131,14 @@ object LuaEmitter:
     case Effect.SetStateOf(targetId, key, v) => yieldCall("setstateof", quote(targetId), quote(key), emitExpr(v))
     case Effect.GetStateOf(targetId, key)    => yieldCall("getstateof", quote(targetId), quote(key))
     case Effect.Collides(target)             => yieldCall("collides", emitExprAsString(target))
-    case Effect.Camera()                     => yieldCall("camera")
-    case Effect.SetCamera(target)            => yieldCall("setcamera", quote(target))
+    case Effect.Camera(zoom, dzx, dzy)       => yieldTable("camera", s"zoom=$zoom, dzx=$dzx, dzy=$dzy")
     case Effect.Music()                      => yieldCall("music")
     case Effect.UserEffect(name)             => yieldCall(name)
     case Effect.SetSize(w, h)                => yieldCall("setsize", emitExpr(w), emitExpr(h))
     case Effect.SpawnAt(tpl, x, y)           => yieldCall("spawnat", quote(tpl), emitExpr(x), emitExpr(y))
+
+    case Effect.SetCamera(target, zoom, dzx, dzy) =>
+      s"""coroutine.yield("setcamera", ${quote(target)}, {zoom=$zoom, dzx=$dzx, dzy=$dzy})"""
 
     case _: Continuation[?] =>
       sys.error("resumeRead()/resumeWrite() can only be used inside a state handler impl (onGet/onSet)")

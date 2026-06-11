@@ -85,14 +85,14 @@ def customValueEffect(name: String)(impl: (Expr, Expr) => Script): CustomEffect[
 // Resumption (inside handler impls)
 
 def resumeWrite()(using b: ScriptBuilder): Unit =
-  b += Perform(Effect.ResumeWrite())
+  perform(Effect.ResumeWrite())
 
 def resumeRead()(using b: ScriptBuilder): Unit =
-  b += Perform(Effect.ResumeRead())
+  perform(Effect.ResumeRead())
 
 // Resume the continuation with a value
 def resumeWith(value: Expr)(using b: ScriptBuilder): Unit =
-  b += Perform(Effect.ResumeWith(value))
+  perform(Effect.ResumeWith(value))
 
 
 // Handler scoping (script-level)
@@ -110,12 +110,12 @@ def handleWith(handler: Handler)(body: ScriptBuilder ?=> Unit)(using b: ScriptBu
 // Camera and spawning (script-level)
 
 // Follow the entity running this script
-def setCamera()(using b: ScriptBuilder): Unit =
-  perform(Effect.Camera())
+def setCamera(zoom: Double = 1.0, deadzoneX: Double = 0.0, deadzoneY: Double = 0.0)(using b: ScriptBuilder): Unit =
+  perform(Effect.Camera(zoom, deadzoneX, deadzoneY))
 
 // Follow a named entity
-def setCamera(entity: Entity)(using b: ScriptBuilder): Unit =
-  perform(Effect.SetCamera(entity.name))
+def setCameraE(entity: Entity, zoom: Double = 1.0, deadzoneX: Double = 0.0, deadzoneY: Double = 0.0)(using b: ScriptBuilder): Unit =
+  perform(Effect.SetCamera(entity.name, zoom, deadzoneX, deadzoneY))
 
 // Spawn a registered template entity at the given position
 def spawnAt(templateName: String, x: Expr, y: Expr)(using b: ScriptBuilder): Unit =

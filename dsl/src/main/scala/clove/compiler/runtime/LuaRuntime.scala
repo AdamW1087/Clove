@@ -297,8 +297,8 @@ object LuaRuntime:
                            |  end,""".stripMargin,
       f.usesGlobals  -> """|  setglobal = function(task, er, a, b, c, dt) globals[a] = b end,
                            |  getglobal = function(task, er, a, b, c, dt) return globals[a] end,""".stripMargin,
-      f.usesCamera   -> "  camera    = function(task, er, a, b, c, dt) camera.target = task.id end,",
-      f.usesCamera   -> "  setcamera = function(task, er, a, b, c, dt) camera.target = a end,",
+      f.usesCamera   -> "  camera    = function(task, er, a, b, c, dt) if camera.target ~= task.id then camera.initialised = false end; camera.target = task.id; camera.zoom = a.zoom; camera.dzx = a.dzx; camera.dzy = a.dzy end,",
+      f.usesCamera   -> "  setcamera = function(task, er, a, b, c, dt) if camera.target ~= a then camera.initialised = false end; camera.target = a; camera.zoom = b.zoom; camera.dzx = b.dzx; camera.dzy = b.dzy end,",
       f.usesSpawnAt  -> "  spawnat  = function(task, er, a, b, c, dt) return handleSpawnAt(a, b, c) end,",
     )
     val entries = (builtins ++ UIRuntime.dispatchEntries(f))
@@ -369,7 +369,7 @@ object LuaRuntime:
        |
        |          love.graphics.setColor(1, 1, 1, 1)
        |          love.graphics.push()
-       |          love.graphics.translate(e.x - camera.x, e.y - camera.y)
+       |          love.graphics.translate(e.x, e.y)
        |          love.graphics.draw(e.sheet, quad, 0, 0, 0, sx, e.height / e.frameHeight, ox, 0)
        |          love.graphics.pop()
        |        end""".stripMargin
@@ -382,7 +382,7 @@ object LuaRuntime:
        |  local imgH = img:getHeight()
        |
        |  if region.visualMode == "stretch" then
-       |    love.graphics.draw(img, region.x - camera.x, region.y - camera.y, 0,
+       |    love.graphics.draw(img, region.x, region.y, 0,
        |      region.w / imgW, region.h / imgH)
        |
        |  elseif region.visualMode == "tile" then
@@ -392,20 +392,27 @@ object LuaRuntime:
        |    local scaleY = tileH / imgH
        |    local cols = math.ceil(region.w / tileW)
        |    local rows = math.ceil(region.h / tileH)
-       |    love.graphics.setScissor(
-       |      region.x - camera.x, region.y - camera.y,
-       |      region.w, region.h)
+       |    -- When a camera is active, map the region rect through 
+       |    -- its transform (focus + zoom + centre shift)
+       |    if camera then
+       |      local sw, sh = love.graphics.getWidth(), love.graphics.getHeight()
+       |      local sx = (region.x - camera.x) * camera.zoom + sw / 2
+       |      local sy = (region.y - camera.y) * camera.zoom + sh / 2
+       |      love.graphics.intersectScissor(sx, sy, region.w * camera.zoom, region.h * camera.zoom)
+       |    else
+       |      love.graphics.intersectScissor(region.x, region.y, region.w, region.h)
+       |    end
        |    for row = 0, rows - 1 do
        |      for col = 0, cols - 1 do
        |        love.graphics.draw(img,
-       |          region.x - camera.x + col * tileW,
-       |          region.y - camera.y + row * tileH,
+       |          region.x + col * tileW,
+       |          region.y + row * tileH,
        |          0, scaleX, scaleY)
        |      end
        |    end
        |    love.graphics.setScissor()
        |
        |  elseif region.visualMode == "sprite" then
-       |    love.graphics.draw(img, region.x - camera.x, region.y - camera.y)
+       |    love.graphics.draw(img, region.x, region.y)
        |  end
        |end""".stripMargin
