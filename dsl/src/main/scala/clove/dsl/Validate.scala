@@ -3,22 +3,11 @@ package clove.dsl
 
 import clove.dsl.*
 import clove.ast.*
+import clove.ast.ScriptTraversal.collectStatements
 
 // Get effect name for nicer error messages
 private def effectName(e: Effect[?]): String =
   e.getClass.getSimpleName.stripSuffix("$")
-
-// Generic recursive traversal
-private def collectStatements[A](script: Script)(extract: Statement => List[A]): List[A] =
-  script.statements.flatMap { stmt =>
-    val here = extract(stmt)
-    val nested = stmt match
-      case If(_, t)            => collectStatements(t)(extract)
-      case IfElse(_, t, e)     => collectStatements(t)(extract) ++ collectStatements(e)(extract)
-      case HandleWith(_, body) => collectStatements(body)(extract)
-      case _                   => Nil
-    here ++ nested
-  }
 
 private def collectConfigureInUpdate(script: Script): List[String] =
   collectStatements(script) {
@@ -103,11 +92,16 @@ private def collectCustomEffectStateKeys(effect: CustomEffect[?]): Set[String] =
     case _                                => Nil
   }.toSet
 
+// Does the expression propagate, either bare or nested (e.g. 3.0 * propagate())
 private def containsPropagation(expr: Expr): Boolean = expr match
-  case Expr.Propagate        => true
-  case Expr.BinOp(_, l, r)   => containsPropagation(l) || containsPropagation(r)
-  case Expr.Negate(e)        => containsPropagation(e)
-  case _                     => false
+  case Expr.Propagate       => true
+  case Expr.BinOp(_, l, r)  => containsPropagation(l) || containsPropagation(r)
+  case Expr.Negate(e)       => containsPropagation(e)
+  case Expr.Ceil(e)         => containsPropagation(e)
+  case Expr.Floor(e)        => containsPropagation(e)
+  case Expr.Max(es*)        => es.exists(containsPropagation)
+  case Expr.Min(es*)        => es.exists(containsPropagation)
+  case _                    => false
 
 // Validation
 def validate(builder: WorldBuilder): Unit =
@@ -150,6 +144,24 @@ def validate(builder: WorldBuilder): Unit =
   val configInUpdate = builder.entities.flatMap(e => collectConfigureInUpdate(e.updateScript))
   require(configInUpdate.isEmpty,
     s"Spawn configuration must be in onSpawn, not onUpdate: ${configInUpdate.mkString(", ")}")
+
+  // Spawn scripts support only a fixed set of statements
+  def collectIllegalSpawnStatements(script: Script): List[String] =
+    script.statements.flatMap {
+      case Perform(Effect.SetState(_, _)) => Nil
+      case Perform(Effect.SetSize(_, _))  => Nil
+      case Configure(_)                   => Nil
+      case Perform(e)                     => List(effectName(e))
+      case Bind(_, e)                     => List(effectName(e))
+      case Discard(e)                     => List(effectName(e))
+      case other                          => List(other.getClass.getSimpleName)
+    }
+
+  val illegalSpawnStatements = (builder.entities ++ builder.templates.values).flatMap { e =>
+    collectIllegalSpawnStatements(e.spawnScript).map(s => s"${e.name}: $s")
+  }
+  require(illegalSpawnStatements.isEmpty,
+    s"onSpawn supports only setState, setSize, and spawn configuration: ${illegalSpawnStatements.mkString(", ")}")
 
   // Resource paths must exist on disk under src/main/resources
   def missingResources(paths: Seq[String]): List[String] =
