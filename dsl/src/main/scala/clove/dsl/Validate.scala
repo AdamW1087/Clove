@@ -103,6 +103,19 @@ private def containsPropagation(expr: Expr): Boolean = expr match
   case Expr.Min(es*)        => es.exists(containsPropagation)
   case _                    => false
 
+// propagate() may only appear bare, or as a direct operand of a single BinOp
+// e.g. (3.0 * propagate())
+private def propagationWellFormed(expr: Expr): Boolean = expr match
+  case Expr.Propagate => true
+  case Expr.BinOp(_, l, r) =>
+    val lProp = l == Expr.Propagate
+    val rProp = r == Expr.Propagate
+    // exactly one side is a bare propagate, and the other side is propagate free
+    if lProp && !rProp then !containsPropagation(r)
+    else if rProp && !lProp then !containsPropagation(l)
+    else false  // both propagate, or propagate nested deeper
+  case _ => false
+
 // Validation
 def validate(builder: WorldBuilder): Unit =
 
@@ -133,6 +146,23 @@ def validate(builder: WorldBuilder): Unit =
   }
   require(propagatingDefaults.isEmpty,
     s"Default handlers must not propagate. The following do: ${propagatingDefaults.mkString(", ")}")
+
+  // propagate() must appear only in a position the emitter can handle
+  val allHandlerValuesForProp = (
+    builder.defaultHandlers ++
+    builder.regions.flatMap {
+      case Region(_, _, _, _, _, Behaviour.Basic(hs), _, _, _) => hs
+      case _ => Nil
+    } ++
+    builder.entities.flatMap(e => collectHandlers(e.updateScript) ++ collectHandlers(e.spawnScript))
+  ).flatMap(_.handles)
+
+  val badPropagation = allHandlerValuesForProp.collect {
+    case (k, v) if containsPropagation(v) && !propagationWellFormed(v) => k
+  }
+  require(badPropagation.isEmpty,
+    s"propagate() may only be used bare or as a direct operand of * + - / " +
+    s"(e.g. 3.0 * propagate()). Bad handler keys: ${badPropagation.mkString(", ")}")
 
   val missingTemplateSize = builder.templates.values
     .filterNot(e => hasSetSize(e.spawnScript) || hasSetSize(e.updateScript))
