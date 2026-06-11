@@ -160,13 +160,10 @@ object LoveRuntime:
     }.filter(_.nonEmpty).mkString("\n")
 
   private def collectUIImagePaths(script: Script): List[String] =
-    script.statements.flatMap {
+    ScriptTraversal.collectStatements(script) {
       case Perform(UI.Sprites(_, _, image, _, _, _, _)) => List(image)
       case Perform(UI.Slots(_, _, _, images, _, _))     => images
       case Perform(UI.Image(_, _, _, _, image, _))      => List(image)
-      case If(_, t)                                     => collectUIImagePaths(t)
-      case IfElse(_, t, e)                              => collectUIImagePaths(t) ++ collectUIImagePaths(e)
-      case HandleWith(_, body)                          => collectUIImagePaths(body)
       case _                                            => Nil
     }
 
@@ -194,6 +191,55 @@ object LoveRuntime:
       """|  local info = love.filesystem.getInfo("main.lua")
          |  if info and info.modtime ~= _lastModified then love.event.quit("restart") end
          |""".stripMargin
+    else ""
+
+  // Music state declarations
+  private def emitMusicStateDecl(features: WorldFeatures): String =
+    if features.usesMusic then
+      "local MUSIC_FADE = 1.0\nlocal _currentTrack = nil\nlocal _musicCurrent = nil\nlocal _musicPrevious = nil\nlocal _fadeProgress = 0"
+    else ""
+
+  // Cached player
+  private def emitPlaySoundFn(features: WorldFeatures): String =
+    if features.usesSound then
+      """|local function playSound(path)
+         |  local src = _sounds[path]
+         |  if not src then
+         |    src = love.audio.newSource(path, "static")
+         |    _sounds[path] = src
+         |  end
+         |  src:clone():play()
+         |end""".stripMargin
+    else ""
+
+  // Edge triggered key tracking
+  private def emitKeypressedFn(features: WorldFeatures): String =
+    if features.usesJustPressed then
+      """|function love.keypressed(key)
+         |  _justPressed[key] = true
+         |end""".stripMargin
+    else ""
+
+  // Per frame, per entity region resolution
+  private def emitEntityRegionsSetup(features: WorldFeatures): String =
+    if features.usesHandlers then
+      """|  local entityRegions = {}
+         |  for id, e in pairs(entities) do
+         |    entityRegions[id] = getHandledRegions(e)
+         |  end""".stripMargin
+    else "  local entityRegions = {}"
+
+  // Camera follow
+  private def emitCameraFollow(features: WorldFeatures): String =
+    if features.usesCamera then
+      """|  if camera.target then
+         |    local followed = entities[camera.target]
+         |    if followed then
+         |      local sw, sh = love.graphics.getWidth(), love.graphics.getHeight()
+         |      camera.x = followed.x + (followed.width or 0) / 2 - sw / 2
+         |      camera.y = followed.y + (followed.height or 0) / 2 - sh / 2
+         |    end
+         |  end""".stripMargin
     else ""
 
 
@@ -236,7 +282,7 @@ local _clove_dt = nil
 
 ${if features.usesJustPressed then "local _justPressed = {}" else ""}
 ${if features.usesSound then "local _sounds = {}" else ""}
-${if features.usesMusic then "local MUSIC_FADE = 1.0\nlocal _currentTrack = nil\nlocal _musicCurrent = nil\nlocal _musicPrevious = nil\nlocal _fadeProgress = 0" else ""}
+${emitMusicStateDecl(features)}
 ${UIRuntime.drawListDecl(features)}
 ${if features.usesVisuals || features.usesUI then "local images = {}" else ""}
 
@@ -247,23 +293,9 @@ ${LuaRuntime.utilityFunctions(features)}
 
 ${LuaRuntime.resolveFunction}
 
-${if features.usesSound then
-  """|-- Cache sources by path
-     |local function playSound(path)
-     |  local src = _sounds[path]
-     |  if not src then
-     |    src = love.audio.newSource(path, "static")
-     |    _sounds[path] = src
-     |  end
-     |  src:clone():play()
-     |end""".stripMargin
-  else ""}
+${emitPlaySoundFn(features)}
 
-${if features.usesJustPressed then
-  """|function love.keypressed(key)
-     |  _justPressed[key] = true
-     |end""".stripMargin
-  else ""}
+${emitKeypressedFn(features)}
 
 ${LuaRuntime.resolveDispatchFunction}
 
@@ -302,12 +334,7 @@ function love.update(dt)
 _clove_dt = dt
 $hotReloadCheck
 ${UIRuntime.drawListClear(features)}
-${if features.usesHandlers then
-    """|  local entityRegions = {}
-       |  for id, e in pairs(entities) do
-       |    entityRegions[id] = getHandledRegions(e)
-       |  end""".stripMargin
-  else "  local entityRegions = {}"}
+${emitEntityRegionsSetup(features)}
 
   for _, task in ipairs(tasks) do
     task.handlerStack = {}
@@ -366,16 +393,7 @@ ${if features.usesHandlers then
   end
 
 ${if features.usesAnimations then LuaRuntime.animUpdate else ""}
-${if features.usesCamera then
-    """|  if camera.target then
-       |    local followed = entities[camera.target]
-       |    if followed then
-       |      local sw, sh = love.graphics.getWidth(), love.graphics.getHeight()
-       |      camera.x = followed.x + (followed.width or 0) / 2 - sw / 2
-       |      camera.y = followed.y + (followed.height or 0) / 2 - sh / 2
-       |    end
-       |  end""".stripMargin
-  else ""}
+${emitCameraFollow(features)}
 
   for i = #tasks, 1, -1 do
     if tasks[i].dead then

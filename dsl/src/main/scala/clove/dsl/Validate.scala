@@ -209,7 +209,7 @@ def validate(builder: WorldBuilder): Unit =
   require(invalidRegions.isEmpty, "Regions must have positive dimensions")
 
   // No duplicate region ids
-  val regionIds = builder.regions.flatMap(_.id)
+  val regionIds = builder.regions.map(_.id)
   val duplicateRegions = regionIds.groupBy(identity).filter(_._2.size > 1).keys
   require(duplicateRegions.isEmpty,
     s"Duplicate region ids: ${duplicateRegions.mkString(", ")}")

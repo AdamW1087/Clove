@@ -53,6 +53,16 @@ object LuaEmitter:
     case Expr.Var(name) => s"\"$name\""
     case other          => emitExpr(other)
 
+  // Handler fields as Lua table entries
+  def emitHandlerFields(handles: Iterable[(String, Expr)], impls: Iterable[(String, Impl)]): String =
+    val values = handles.map { (k, v) =>
+      s"${k.toLowerCase} = ${emitExpr(v)}"
+    }.mkString(", ")
+    val implFields = impls.map { (k, impl) =>
+      s"${k.toLowerCase}_impl = ${emitImpl(impl)}"
+    }.mkString(", ")
+    List(values, implFields).filter(_.nonEmpty).mkString(", ")
+
   // Statement emission
   def emitStatement(stmt: Statement, indent: Int): String =
     val pad = "  " * indent
@@ -82,13 +92,7 @@ object LuaEmitter:
            |${pad}end""".stripMargin
 
       case HandleWith(handler, body) =>
-        val values = handler.handles.map { (k, v) =>
-          s"${k.toLowerCase} = ${emitExpr(v)}"
-        }.mkString(", ")
-        val impls = handler.impls.map { (k, impl) =>
-          s"${k.toLowerCase}_impl = ${emitImpl(impl)}"
-        }.mkString(", ")
-        val allFields = List(values, impls).filter(_.nonEmpty).mkString(", ")
+        val allFields = emitHandlerFields(handler.handles, handler.impls)
         val nameComment = handler.name.map(n => s" -- $n").getOrElse("")
         val bodyLua = emitScript(body, indent)
         if bodyLua.nonEmpty then
@@ -105,6 +109,14 @@ object LuaEmitter:
 
   // Wrap a string to Lua string literal
   private def quote(s: String): String = "\"" + s + "\""
+
+  // Emit coroutine.yield("name", { ...fields... })
+  private def yieldTable(name: String, fields: String): String =
+    s"""coroutine.yield("$name", {$fields})"""
+
+  // Emit an (r, g, b) colour tuple as Lua fields
+  private def rgbFields(c: (Double, Double, Double), rName: String, gName: String, bName: String): String =
+    s"$rName=${c._1}, $gName=${c._2}, $bName=${c._3}"
 
   def emitYield(effect: Effect[?]): String = effect match
     case Effect.Move(dx, dy)                 => yieldCall("move", emitExpr(dx), emitExpr(dy))
@@ -130,22 +142,28 @@ object LuaEmitter:
       sys.error("resumeRead()/resumeWrite() can only be used inside a state handler impl (onGet/onSet)")
 
     // UI effects
-    case UI.Bar(x, y, w, h, value, max, (r,g,b), (rb,gb,bb)) =>
-      s"""coroutine.yield("uibar", {x=$x, y=$y, w=$w, h=$h, value=${emitExpr(value)}, max=${emitExpr(max)}, r=$r, g=$g, b=$b, rb=$rb, gb=$gb, bb=$bb})"""
+    case UI.Bar(x, y, w, h, value, max, fg, bg) =>
+      yieldTable("uibar",
+        s"x=$x, y=$y, w=$w, h=$h, value=${emitExpr(value)}, max=${emitExpr(max)}, " +
+        s"${rgbFields(fg, "r", "g", "b")}, ${rgbFields(bg, "rb", "gb", "bb")}")
 
-    case UI.Label(x, y, prefix, value, (r,g,b)) =>
+    case UI.Label(x, y, prefix, value, fg) =>
       val valStr = value.map(v => s", value=${emitExpr(v)}").getOrElse("")
-      s"""coroutine.yield("uilabel", {x=$x, y=$y, prefix="$prefix"$valStr, r=$r, g=$g, b=$b})"""
+      yieldTable("uilabel",
+        s"""x=$x, y=$y, prefix="$prefix"$valStr, ${rgbFields(fg, "r", "g", "b")}""")
 
     case UI.Sprites(x, y, image, count, spacing, w, h) =>
-      s"""coroutine.yield("uisprites", {x=$x, y=$y, image="$image", count=${emitExpr(count)}, spacing=$spacing, w=$w, h=$h})"""
+      yieldTable("uisprites",
+        s"""x=$x, y=$y, image="$image", count=${emitExpr(count)}, spacing=$spacing, w=$w, h=$h""")
 
     case UI.Slots(x, y, size, images, selected, spacing) =>
-      val imgList = images.map(i => s"\"$i\"").mkString(", ")
-      s"""coroutine.yield("uislots", {x=$x, y=$y, size=$size, images={$imgList}, selected=${emitExpr(selected)}, spacing=$spacing})"""
+      val imgList = images.map(quote).mkString(", ")
+      yieldTable("uislots",
+        s"x=$x, y=$y, size=$size, images={$imgList}, selected=${emitExpr(selected)}, spacing=$spacing")
 
-    case UI.Image(x, y, w, h, image, (r,g,b)) =>
-      s"""coroutine.yield("uiimage", {x=$x, y=$y, w=$w, h=$h, image="$image", r=$r, g=$g, b=$b})"""
+    case UI.Image(x, y, w, h, image, fg) =>
+      yieldTable("uiimage",
+        s"""x=$x, y=$y, w=$w, h=$h, image="$image", ${rgbFields(fg, "r", "g", "b")}""")
 
   def emitScript(script: Script, indent: Int = 0): String =
     script.statements
