@@ -3,22 +3,14 @@ package clove.compiler.runtime
 import clove.ast.*
 import clove.dsl.{Region, Behaviour, Visual, VisualMode, World}
 import clove.compiler.{LuaEmitter, WorldAnalyser}
+import clove.compiler.WorldFeatures
 
 object LoveRuntime:
 
-  val groundLevel = 600
-
-  def wrap(world: World, hotReload: Boolean = false): String =
-    val features = WorldAnalyser.analyse(world)
-
-    val visualImagePaths = world.regions
-      .flatMap(_.visual)
-      .map(_.path)
-      .distinct
-
-    // Emission helpers
-    val regionTable = world.regions.zipWithIndex.map { (r, idx) =>
-      val idStr = r.id.map(id => s"\"$id\"").getOrElse(s"\"region_$idx\"")
+  // The region table
+  private def emitRegionTable(world: World): String =
+    world.regions.zipWithIndex.map { (r, idx) =>
+      val idStr = s"\"${r.id}\""
 
       val condStr = r.condition match
         case None       => "nil"
@@ -45,13 +37,7 @@ object LoveRuntime:
 
       r.behaviour match
         case Behaviour.Basic(handlers) =>
-          val overrides = handlers.flatMap(_.handles).map { (k, v) =>
-            s"${k.toLowerCase} = ${LuaEmitter.emitExpr(v)}"
-          }.mkString(", ")
-          val implOverrides = handlers.flatMap(_.impls).map { (k, f) =>
-            s"${k.toLowerCase}_impl = ${LuaEmitter.emitImpl(f)}"
-          }.mkString(", ")
-          val allFields = List(overrides, implOverrides).filter(_.nonEmpty).mkString(", ")
+          val allFields = LuaEmitter.emitHandlerFields(handlers.flatMap(_.handles), handlers.flatMap(_.impls))
           val hasHandlers = handlers.exists(h => h.handles.nonEmpty || h.impls.nonEmpty)
           val typeFields = s"type = \"basic\", hasHandlers = $hasHandlers" +
                             (if allFields.nonEmpty then s", $allFields" else "")
@@ -60,36 +46,29 @@ object LoveRuntime:
         case Behaviour.Solid(oneWay) =>
           s"  {$commonFields, type = \"solid\", oneWay = $oneWay}"
 
-        case Behaviour.Trigger(onEnter, onExit) =>
-          val enterLua = LuaEmitter.emitTriggerScript(onEnter)
-          val exitLua  = LuaEmitter.emitTriggerScript(onExit)
-          s"""  {$commonFields, type = "trigger",
-             |   onEnter = function(task_id, globals) $enterLua end,
-             |   onExit  = function(task_id, globals) $exitLua end}""".stripMargin
-
     }.mkString(",\n")
 
-    val globalsTable = world.initialGlobals.map { (k, v) =>
+  private def emitGlobalsTable(world: World): String =
+    world.initialGlobals.map { (k, v) =>
       s"  [\"$k\"] = ${LuaEmitter.emitExpr(v)}"
     }.mkString(",\n")
 
-    val defaultHandlerTable = world.defaultHandlers.map { h =>
+  private def emitDefaultHandlerTable(world: World): String =
+    world.defaultHandlers.map { h =>
       val values = h.handles.map { (k, v) => s"  ${k.toLowerCase} = ${LuaEmitter.emitExpr(v)}" }
       val impls = h.impls.map { (k, f) => s"  ${k.toLowerCase}_impl = ${LuaEmitter.emitImpl(f)}" }
       (values ++ impls).mkString(",\n")
     }.mkString(",\n")
 
-    val effectImpls = world.customEffects.map { e =>
+  private def emitEffectImpls(world: World): String =
+    world.customEffects.map { e =>
       val body = e.impl(Expr.Var("resolved"), Expr.Var("dt"))
       s"  ${e.name.toLowerCase} = ${LuaEmitter.emitImpl(Impl(body))}"
     }.mkString(",\n")
 
-    val templateCoroutines = world.templates.values
-      .filter(_.updateScript.statements.nonEmpty)
-      .map { e => s"local ${e.name}Template = ${LuaEmitter.emitCoroutine(e.name, e.updateScript)}" }
-      .mkString("\n")
-
-    val templateSpawnScripts = if world.templates.isEmpty then "" else
+  // Template definitions, init/update scripts, and the runtime spawn helper,
+  private def emitTemplateSpawnScripts(world: World): String =
+    if world.templates.isEmpty then "" else
       val defs = world.templates.values.map { e =>
         s"""  ["${e.name}"] = function(id)\n${LuaEmitter.emitSpawnScript(e.name, e.spawnScript).replace(s""""${e.name}"""", "id")}\n  end"""
       }.mkString(",\n")
@@ -137,27 +116,30 @@ object LoveRuntime:
          |  end
          |end""".stripMargin
 
-    // Store all coroutines
-    val coroutines =
-      "local _scripts = {}\n" +
-      world.entities
-        .filter(_.updateScript.statements.nonEmpty)
-        .map { e => s"""_scripts["${e.name}"] = ${LuaEmitter.emitCoroutine(e.name, e.updateScript)}""" }
-        .mkString("\n")
+  // Per entity update coroutines
+  private def emitCoroutines(world: World): String =
+    "local _scripts = {}\n" +
+    world.entities
+      .filter(_.updateScript.statements.nonEmpty)
+      .map { e => s"""_scripts["${e.name}"] = ${LuaEmitter.emitCoroutine(e.name, e.updateScript)}""" }
+      .mkString("\n")
 
-    val initCoroutines =
-      "local _initScripts = {}\n" +
-      world.entities
-        .filter(_.initScript.statements.nonEmpty)
-        .map { e => s"""_initScripts["${e.name}"] = ${LuaEmitter.emitInitCoroutine(e.name, e.initScript)}""" }
-        .mkString("\n")
+  // Per entity init coroutines
+  private def emitInitCoroutines(world: World): String =
+    "local _initScripts = {}\n" +
+    world.entities
+      .filter(_.initScript.statements.nonEmpty)
+      .map { e => s"""_initScripts["${e.name}"] = ${LuaEmitter.emitInitCoroutine(e.name, e.initScript)}""" }
+      .mkString("\n")
 
-    val spawnSetup = world.entities.map { e =>
+  private def emitSpawnSetup(world: World): String =
+    world.entities.map { e =>
       s"""  entities["${e.name}"] = {vy = 0}
          |${LuaEmitter.emitSpawnScript(e.name, e.spawnScript)}""".stripMargin
     }.mkString("\n")
 
-    val taskSetup = world.entities.map { e =>
+  private def emitTaskSetup(world: World): String =
+    world.entities.map { e =>
       val hasInit = e.initScript.statements.nonEmpty
       val hasUpdate = e.updateScript.statements.nonEmpty
       (hasInit, hasUpdate) match
@@ -171,51 +153,130 @@ object LoveRuntime:
           ""
     }.filter(_.nonEmpty).mkString("\n")
 
-    def collectUIImagePaths(script: Script): List[String] =
-      script.statements.flatMap {
-        case Perform(UI.Sprites(_, _, image, _, _, _, _)) => List(image)
-        case Perform(UI.Slots(_, _, _, images, _, _))     => images
-        case Perform(UI.Image(_, _, _, _, image, _))      => List(image)
-        case If(_, t)                                     => collectUIImagePaths(t)
-        case IfElse(_, t, e)                              => collectUIImagePaths(t) ++ collectUIImagePaths(e)
-        case HandleWith(_, body)                          => collectUIImagePaths(body)
-        case _                                            => Nil
-      }
+  private def collectUIImagePaths(script: Script): List[String] =
+    ScriptTraversal.collectStatements(script) {
+      case Perform(UI.Sprites(_, _, image, _, _, _, _)) => List(image)
+      case Perform(UI.Slots(_, _, _, images, _, _))     => images
+      case Perform(UI.Image(_, _, _, _, image, _))      => List(image)
+      case _                                            => Nil
+    }
 
-    val uiImagePaths = world.entities
-      .flatMap(e => collectUIImagePaths(e.updateScript))
-      .distinct
+  // Image cache loader for region visuals and UI images
+  private def emitVisualCacheLoad(world: World, features: WorldFeatures): String =
+    val visualImagePaths = world.regions.flatMap(_.visual).map(_.path).distinct
+    val uiImagePaths     = world.entities.flatMap(e => collectUIImagePaths(e.updateScript)).distinct
+    val allImagePaths    = (visualImagePaths ++ uiImagePaths).distinct
 
-    val allImagePaths = (visualImagePaths ++ uiImagePaths).distinct
-
-    val visualCacheLoad = if features.usesVisuals || features.usesUI then
+    if features.usesVisuals || features.usesUI then
       val cacheEntries = allImagePaths.map { path =>
         s"  images[\"$path\"] = love.graphics.newImage(\"$path\")"
       }.mkString("\n")
       s"  -- Image cache (region visuals + UI)\n$cacheEntries"
     else ""
 
-    val hotReloadBlock = if hotReload then
+  private def emitHotReloadBlock(hotReload: Boolean): String =
+    if hotReload then
       """|local _lastModified = love.filesystem.getInfo("main.lua") and love.filesystem.getInfo("main.lua").modtime or 0
          |""".stripMargin
     else ""
 
-    val hotReloadCheck = if hotReload then
+  private def emitHotReloadCheck(hotReload: Boolean): String =
+    if hotReload then
       """|  local info = love.filesystem.getInfo("main.lua")
          |  if info and info.modtime ~= _lastModified then love.event.quit("restart") end
          |""".stripMargin
     else ""
 
-    // Generated Lua
-    val cx = if features.usesCamera then "camera.x" else "0"
-    val cy = if features.usesCamera then "camera.y" else "0"
+  // Music state declarations
+  private def emitMusicStateDecl(features: WorldFeatures): String =
+    if features.usesMusic then
+      "local MUSIC_FADE = 1.0\nlocal _currentTrack = nil\nlocal _musicCurrent = nil\nlocal _musicPrevious = nil\nlocal _fadeProgress = 0"
+    else ""
+
+  // Cached player
+  private def emitPlaySoundFn(features: WorldFeatures): String =
+    if features.usesSound then
+      """|local function playSound(path)
+         |  local src = _sounds[path]
+         |  if not src then
+         |    src = love.audio.newSource(path, "static")
+         |    _sounds[path] = src
+         |  end
+         |  src:clone():play()
+         |end""".stripMargin
+    else ""
+
+  // Edge triggered key tracking
+  private def emitKeypressedFn(features: WorldFeatures): String =
+    if features.usesJustPressed then
+      """|function love.keypressed(key)
+         |  _justPressed[key] = true
+         |end""".stripMargin
+    else ""
+
+  // Per frame, per entity region resolution
+  private def emitEntityRegionsSetup(features: WorldFeatures): String =
+    if features.usesHandlers then
+      """|  local entityRegions = {}
+         |  for id, e in pairs(entities) do
+         |    entityRegions[id] = getHandledRegions(e)
+         |  end""".stripMargin
+    else "  local entityRegions = {}"
+
+  // Camera follow
+  private def emitCameraFollow(features: WorldFeatures): String =
+    if features.usesCamera then
+      """|  if camera.target then
+         |    local followed = entities[camera.target]
+         |    if followed then
+         |      -- target centre (world)
+         |      local tx = followed.x + (followed.width or 0) / 2
+         |      local ty = followed.y + (followed.height or 0) / 2
+         |      if not camera.initialised then
+         |        -- snap straight to the target the first frame we follow it
+         |        camera.x = tx
+         |        camera.y = ty
+         |        camera.initialised = true
+         |      else
+         |        -- deadzone half-width in world units
+         |        local hx = (camera.dzx / 2) / camera.zoom
+         |        local hy = (camera.dzy / 2) / camera.zoom
+         |        local dx = tx - camera.x
+         |        if dx >  hx then camera.x = camera.x + (dx - hx) end
+         |        if dx < -hx then camera.x = camera.x + (dx + hx) end
+         |        local dy = ty - camera.y
+         |        if dy >  hy then camera.y = camera.y + (dy - hy) end
+         |        if dy < -hy then camera.y = camera.y + (dy + hy) end
+         |      end
+         |    end
+         |  end""".stripMargin
+    else ""
+
+
+  def wrap(world: World, hotReload: Boolean = false): String =
+    val features = WorldAnalyser.analyse(world)
+
+    val regionTable          = emitRegionTable(world)
+    val globalsTable         = emitGlobalsTable(world)
+    val defaultHandlerTable  = emitDefaultHandlerTable(world)
+    val effectImpls          = emitEffectImpls(world)
+    val templateSpawnScripts = emitTemplateSpawnScripts(world)
+    val coroutines           = emitCoroutines(world)
+    val initCoroutines       = emitInitCoroutines(world)
+    val spawnSetup           = emitSpawnSetup(world)
+    val taskSetup            = emitTaskSetup(world)
+    val visualCacheLoad      = emitVisualCacheLoad(world, features)
+    val hotReloadBlock       = emitHotReloadBlock(hotReload)
+    val hotReloadCheck       = emitHotReloadCheck(hotReload)
+
+    val cx = "0"
+    val cy = "0"
 
     s"""-- Generated by Clove
 $hotReloadBlock
 local entities = {}
 local tasks    = {}
-${if features.usesCamera  then "local camera = {x = 0, y = 0, target = nil}" else ""}
-${if features.usesGravity then s"local GROUND = $groundLevel" else ""}
+${if features.usesCamera  then "local camera = {x = 0, y = 0, target = nil, zoom = 1.0, dzx = 0.0, dzy = 0.0}" else ""}
 
 ${if features.usesGlobals then s"local globals = {\n$globalsTable\n}" else ""}
 
@@ -227,13 +288,12 @@ local regions = {
 $regionTable
 }
 
-_clove_dt = nil
+local _clove_dt = nil
 
 ${if features.usesJustPressed then "local _justPressed = {}" else ""}
 ${if features.usesSound then "local _sounds = {}" else ""}
-${if features.usesMusic then "local MUSIC_FADE = 1.0\nlocal _currentTrack = nil\nlocal _musicCurrent = nil\nlocal _musicPrevious = nil\nlocal _fadeProgress = 0" else ""}
+${emitMusicStateDecl(features)}
 ${UIRuntime.drawListDecl(features)}
-${if features.usesTriggers  then "local prevOverlap = {}" else ""}
 ${if features.usesVisuals || features.usesUI then "local images = {}" else ""}
 
 $templateSpawnScripts
@@ -243,23 +303,9 @@ ${LuaRuntime.utilityFunctions(features)}
 
 ${LuaRuntime.resolveFunction}
 
-${if features.usesSound then
-  """|-- Cache sources by path
-     |local function playSound(path)
-     |  local src = _sounds[path]
-     |  if not src then
-     |    src = love.audio.newSource(path, "static")
-     |    _sounds[path] = src
-     |  end
-     |  src:clone():play()
-     |end""".stripMargin
-  else ""}
+${emitPlaySoundFn(features)}
 
-${if features.usesJustPressed then
-  """|function love.keypressed(key)
-     |  _justPressed[key] = true
-     |end""".stripMargin
-  else ""}
+${emitKeypressedFn(features)}
 
 ${LuaRuntime.resolveDispatchFunction}
 
@@ -298,12 +344,7 @@ function love.update(dt)
 _clove_dt = dt
 $hotReloadCheck
 ${UIRuntime.drawListClear(features)}
-${if features.usesHandlers then
-    """|  local entityRegions = {}
-       |  for id, e in pairs(entities) do
-       |    entityRegions[id] = getHandledRegions(e)
-       |  end""".stripMargin
-  else "  local entityRegions = {}"}
+${emitEntityRegionsSetup(features)}
 
   for _, task in ipairs(tasks) do
     task.handlerStack = {}
@@ -362,17 +403,7 @@ ${if features.usesHandlers then
   end
 
 ${if features.usesAnimations then LuaRuntime.animUpdate else ""}
-${if features.usesTriggers   then "  handleTriggers()" else ""}
-${if features.usesCamera then
-    """|  if camera.target then
-       |    local followed = entities[camera.target]
-       |    if followed then
-       |      local sw, sh = love.graphics.getWidth(), love.graphics.getHeight()
-       |      camera.x = followed.x + (followed.width or 0) / 2 - sw / 2
-       |      camera.y = followed.y + (followed.height or 0) / 2 - sh / 2
-       |    end
-       |  end""".stripMargin
-  else ""}
+${emitCameraFollow(features)}
 
   for i = #tasks, 1, -1 do
     if tasks[i].dead then
@@ -388,6 +419,13 @@ ${if features.usesMusic then "  updateMusic(dt)" else ""}
 end
 
 function love.draw()
+${if features.usesCamera then
+  """|  love.graphics.push()
+     |  local _sw, _sh = love.graphics.getWidth(), love.graphics.getHeight()
+     |  love.graphics.translate(_sw / 2, _sh / 2)
+     |  love.graphics.scale(camera.zoom, camera.zoom)
+     |  love.graphics.translate(-camera.x, -camera.y)""".stripMargin
+  else ""}
   for _, region in ipairs(regions) do
     if regionActive(region) then
       if region.hasColor then
@@ -420,6 +458,7 @@ ${if features.usesAnimations then
       end
     end
   end
+${if features.usesCamera then "  love.graphics.pop()" else ""}
 
 ${UIRuntime.renderBlock(features)}
 end""".stripMargin

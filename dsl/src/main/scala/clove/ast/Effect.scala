@@ -1,5 +1,8 @@
 package clove.ast
 
+import clove.dsl.ScriptBuilder
+import clove.dsl.helpers.bind
+
 // Effects that have a key representation
 sealed trait EffectKey:
   def name: String
@@ -17,7 +20,7 @@ enum Key(val name: String) extends EffectKey:
   case GetState extends Key("getstate")
   case SetState extends Key("setstate")
 
-// A user-defined custom effect
+// A user defined custom effect
 case class CustomEffect[R](effectName: String, impl: (Expr, Expr) => Script) extends EffectKey:
   val name = effectName.toLowerCase
   def toEffect: Effect[R] = Effect.UserEffect[R](name)
@@ -25,16 +28,12 @@ case class CustomEffect[R](effectName: String, impl: (Expr, Expr) => Script) ext
 // A query effect key
 case class QueryKey(effectName: String) extends EffectKey:
   val name = effectName.toLowerCase
-  def apply()(using b: clove.dsl.ScriptBuilder): Expr =
-    val varName = b.nextVar()
-    b += Bind(varName, Effect.UserEffect[Expr](name))
-    Expr.Var(varName)
+  def apply()(using b: ScriptBuilder): Expr = bind(Effect.UserEffect[Expr](name))
 
 // An Effect a script performs, with resumption type R
 sealed trait Effect[+R]
 
-// Continuation, resume an intercepted effect. Only valid inside
-// handler impls (onGet/onSet)
+// Continuation, resume an intercepted effect. Only valid inside handler impls (onGet/onSet)
 sealed trait Continuation[+R] extends Effect[R]
 
 object Effect:
@@ -45,9 +44,11 @@ object Effect:
   case class SetSize(width: Expr, height: Expr)                     extends Effect[Unit]
   case class SetStateOf(targetId: String, key: String, value: Expr) extends Effect[Unit]
 
-  // Todo: maybe look into modifying how the camera sits (e.g. zoom)
-  case class Camera()                                               extends Effect[Unit]
-  case class SetCamera(target: String)                              extends Effect[Unit]
+  case class Camera(zoom: Double, 
+                    deadzoneX: Double, deadzoneY: Double)           extends Effect[Unit]
+  case class SetCamera(target: String, zoom: Double, 
+                    deadzoneX: Double, deadzoneY: Double)           extends Effect[Unit]
+
   case class Music()                                                extends Effect[Unit]
   case class SpawnAt(templateName: String, x: Expr, y: Expr)        extends Effect[Unit]
   case class PlaySound(path: String)                                extends Effect[Unit]
@@ -60,7 +61,7 @@ object Effect:
   case class GetStateOf(targetId: String, key: String) extends Effect[Expr]
   case class Collides(target: Expr)                    extends Effect[Expr]
 
-  // User-defined effect
+  // User defined effect
   // R is Unit for action effects, Expr for query effects
   case class UserEffect[R](name: String) extends Effect[R]
 
@@ -93,7 +94,7 @@ object UI:
     x: Double, y: Double,
     prefix: String,
     value: Option[Expr] = None,
-    colour: (Double, Double, Double) = (1.0, 1.0, 1.0)
+    colour: (Double, Double, Double)
   ) extends UI
 
   // Repeated sprite icons
@@ -105,8 +106,6 @@ object UI:
     w: Double,
     h: Double
   ) extends UI
-
-//  TO CHECK
 
   // Hotbar
   case class Slots(
@@ -122,5 +121,5 @@ object UI:
     x: Double, y: Double,
     w: Double, h: Double,
     image: String,
-    colour: (Double, Double, Double) = (1.0, 1.0, 1.0)
+    colour: (Double, Double, Double)
   ) extends UI

@@ -12,15 +12,9 @@ object Behaviour:
   // Region cannot be walked inside of
   case class Solid(oneWay: Boolean = false) extends Behaviour
 
-  // Region can trigger scripts if an entity enters or leaves
-  case class Trigger(
-    onEnter: Script = Script(List.empty),
-    onExit:  Script = Script(List.empty)
-  ) extends Behaviour
-
 
 case class Region(
-  id: Option[String],
+  id: String,
   x: Double, y: Double, w: Double, h: Double,
   behaviour: Behaviour,
   condition: Option[Expr] = None,

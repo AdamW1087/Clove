@@ -14,28 +14,19 @@ object UIRuntime:
     if f.usesUI then "  uiDrawList = {}" else ""
 
   // Dispatch table entries
-  def dispatchEntries(f: WorldFeatures): List[(Boolean, String)] = List(
-    f.usesUIBar -> """|  uibar = function(task, er, a, b, c, dt)
-                      |    a.type = "bar"
-                      |    table.insert(uiDrawList, a)
-                      |  end,""".stripMargin,
-    f.usesUILabel -> """|  uilabel = function(task, er, a, b, c, dt)
-                        |    a.type = "label"
-                        |    table.insert(uiDrawList, a)
-                        |  end,""".stripMargin,
-    f.usesUISprites -> """|  uisprites = function(task, er, a, b, c, dt)
-                          |    a.type = "sprites"
-                          |    table.insert(uiDrawList, a)
-                          |  end,""".stripMargin,
-    f.usesUISlots -> """|  uislots = function(task, er, a, b, c, dt)
-                        |    a.type = "slots"
-                        |    table.insert(uiDrawList, a)
-                        |  end,""".stripMargin,
-    f.usesUIImage -> """|  uiimage = function(task, er, a, b, c, dt)
-                        |    a.type = "image"
-                        |    table.insert(uiDrawList, a)
-                        |  end,""".stripMargin,
-  )
+  def dispatchEntries(f: WorldFeatures): List[(Boolean, String)] =
+    List(
+      f.usesUIBar     -> "bar",
+      f.usesUILabel   -> "label",
+      f.usesUISprites -> "sprites",
+      f.usesUISlots   -> "slots",
+      f.usesUIImage   -> "image",
+    ).map { (enabled, name) =>
+      enabled -> s"""|  ui$name = function(task, er, a, b, c, dt)
+                     |    a.type = "$name"
+                     |    table.insert(uiDrawList, a)
+                     |  end,""".stripMargin
+    }
 
   // Render block
   def renderBlock(f: WorldFeatures): String =

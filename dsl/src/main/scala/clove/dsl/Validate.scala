@@ -3,22 +3,11 @@ package clove.dsl
 
 import clove.dsl.*
 import clove.ast.*
+import clove.ast.ScriptTraversal.collectStatements
 
 // Get effect name for nicer error messages
 private def effectName(e: Effect[?]): String =
   e.getClass.getSimpleName.stripSuffix("$")
-
-// Generic recursive traversal
-private def collectStatements[A](script: Script)(extract: Statement => List[A]): List[A] =
-  script.statements.flatMap { stmt =>
-    val here = extract(stmt)
-    val nested = stmt match
-      case If(_, t)            => collectStatements(t)(extract)
-      case IfElse(_, t, e)     => collectStatements(t)(extract) ++ collectStatements(e)(extract)
-      case HandleWith(_, body) => collectStatements(body)(extract)
-      case _                   => Nil
-    here ++ nested
-  }
 
 private def collectConfigureInUpdate(script: Script): List[String] =
   collectStatements(script) {
@@ -73,28 +62,9 @@ private def collectStateReads(script: Script): List[String] =
 
 // HandleWith needs the handler itself
 private def collectHandlers(script: Script): List[Handler] =
-  script.statements.flatMap {
-    case HandleWith(h, body) => h :: collectHandlers(body)
-    case If(_, t)            => collectHandlers(t)
-    case IfElse(_, t, e)     => collectHandlers(t) ++ collectHandlers(e)
-    case _                   => Nil
-  }
-
-// Trigger scripts may only use a restricted effect set
-private def collectIllegalTriggerEffects(script: Script): List[String] =
-  script.statements.flatMap {
-    case Perform(Effect.SetState(_, _))  => Nil
-    case Perform(Effect.SetGlobal(_, _)) => Nil
-    case Perform(Effect.SetSize(_, _))   => Nil
-    case Bind(_, Effect.GetState(_))     => Nil
-    case Bind(_, Effect.GetGlobal(_))    => Nil
-    case Perform(_: UI)                  => List("UI effects cannot be used in trigger scripts")
-    case If(_, t)                        => collectIllegalTriggerEffects(t)
-    case IfElse(_, t, e)                 => collectIllegalTriggerEffects(t) ++ collectIllegalTriggerEffects(e)
-    case Perform(e)                      => List(effectName(e))
-    case Bind(_, e)                      => List(effectName(e))
-    case Discard(e)                      => List(effectName(e))
-    case _                               => Nil
+  collectStatements(script) {
+    case HandleWith(h, _) => List(h)
+    case _                => Nil
   }
 
 private def collectObsGlobals(expr: Expr): List[String] = expr match
@@ -122,6 +92,30 @@ private def collectCustomEffectStateKeys(effect: CustomEffect[?]): Set[String] =
     case _                                => Nil
   }.toSet
 
+// Does the expression propagate, either bare or nested (e.g. 3.0 * propagate())
+private def containsPropagation(expr: Expr): Boolean = expr match
+  case Expr.Propagate       => true
+  case Expr.BinOp(_, l, r)  => containsPropagation(l) || containsPropagation(r)
+  case Expr.Negate(e)       => containsPropagation(e)
+  case Expr.Ceil(e)         => containsPropagation(e)
+  case Expr.Floor(e)        => containsPropagation(e)
+  case Expr.Max(es*)        => es.exists(containsPropagation)
+  case Expr.Min(es*)        => es.exists(containsPropagation)
+  case _                    => false
+
+// propagate() may only appear bare, or as a direct operand of a single BinOp
+// e.g. (3.0 * propagate())
+private def propagationWellFormed(expr: Expr): Boolean = expr match
+  case Expr.Propagate => true
+  case Expr.BinOp(_, l, r) =>
+    val lProp = l == Expr.Propagate
+    val rProp = r == Expr.Propagate
+    // exactly one side is a bare propagate, and the other side is propagate free
+    if lProp && !rProp then !containsPropagation(r)
+    else if rProp && !lProp then !containsPropagation(l)
+    else false  // both propagate, or propagate nested deeper
+  case _ => false
+
 // Validation
 def validate(builder: WorldBuilder): Unit =
 
@@ -147,6 +141,29 @@ def validate(builder: WorldBuilder): Unit =
   require(missingSize.isEmpty,
     s"Entities missing setSize: ${missingSize.mkString(", ")}")
 
+  val propagatingDefaults = builder.defaultHandlers.flatMap { h =>
+    h.handles.filter((_, v) => containsPropagation(v)).keys
+  }
+  require(propagatingDefaults.isEmpty,
+    s"Default handlers must not propagate. The following do: ${propagatingDefaults.mkString(", ")}")
+
+  // propagate() must appear only in a position the emitter can handle
+  val allHandlerValuesForProp = (
+    builder.defaultHandlers ++
+    builder.regions.flatMap {
+      case Region(_, _, _, _, _, Behaviour.Basic(hs), _, _, _) => hs
+      case _ => Nil
+    } ++
+    builder.entities.flatMap(e => collectHandlers(e.updateScript) ++ collectHandlers(e.spawnScript))
+  ).flatMap(_.handles)
+
+  val badPropagation = allHandlerValuesForProp.collect {
+    case (k, v) if containsPropagation(v) && !propagationWellFormed(v) => k
+  }
+  require(badPropagation.isEmpty,
+    s"propagate() may only be used bare or as a direct operand of * + - / " +
+    s"(e.g. 3.0 * propagate()). Bad handler keys: ${badPropagation.mkString(", ")}")
+
   val missingTemplateSize = builder.templates.values
     .filterNot(e => hasSetSize(e.spawnScript) || hasSetSize(e.updateScript))
     .map(_.name).toList
@@ -157,6 +174,24 @@ def validate(builder: WorldBuilder): Unit =
   val configInUpdate = builder.entities.flatMap(e => collectConfigureInUpdate(e.updateScript))
   require(configInUpdate.isEmpty,
     s"Spawn configuration must be in onSpawn, not onUpdate: ${configInUpdate.mkString(", ")}")
+
+  // Spawn scripts support only a fixed set of statements
+  def collectIllegalSpawnStatements(script: Script): List[String] =
+    script.statements.flatMap {
+      case Perform(Effect.SetState(_, _)) => Nil
+      case Perform(Effect.SetSize(_, _))  => Nil
+      case Configure(_)                   => Nil
+      case Perform(e)                     => List(effectName(e))
+      case Bind(_, e)                     => List(effectName(e))
+      case Discard(e)                     => List(effectName(e))
+      case other                          => List(other.getClass.getSimpleName)
+    }
+
+  val illegalSpawnStatements = (builder.entities ++ builder.templates.values).flatMap { e =>
+    collectIllegalSpawnStatements(e.spawnScript).map(s => s"${e.name}: $s")
+  }
+  require(illegalSpawnStatements.isEmpty,
+    s"onSpawn supports only setState, setSize, and spawn configuration: ${illegalSpawnStatements.mkString(", ")}")
 
   // Resource paths must exist on disk under src/main/resources
   def missingResources(paths: Seq[String]): List[String] =
@@ -216,20 +251,10 @@ def validate(builder: WorldBuilder): Unit =
   require(invalidRegions.isEmpty, "Regions must have positive dimensions")
 
   // No duplicate region ids
-  val regionIds = builder.regions.flatMap(_.id)
+  val regionIds = builder.regions.map(_.id)
   val duplicateRegions = regionIds.groupBy(identity).filter(_._2.size > 1).keys
   require(duplicateRegions.isEmpty,
     s"Duplicate region ids: ${duplicateRegions.mkString(", ")}")
-
-  // Trigger scripts may only use a restricted set of effects
-  val illegalTriggerEffects = builder.regions.flatMap {
-    case Region(id, _, _, _, _, Behaviour.Trigger(onEnter, onExit), _, _, _) =>
-      val bad = collectIllegalTriggerEffects(onEnter) ++ collectIllegalTriggerEffects(onExit)
-      bad.map(e => s"${id.getOrElse("unnamed trigger")}: $e")
-    case _ => Nil
-  }
-  require(illegalTriggerEffects.isEmpty,
-    s"Trigger scripts may only use setState/getState/setGlobal/getGlobal: ${illegalTriggerEffects.mkString(", ")}")
 
   // obsGlobal keys must be declared in the world globals
   val globalKeys = builder.globals.keySet

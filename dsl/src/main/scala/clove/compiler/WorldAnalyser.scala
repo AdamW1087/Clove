@@ -1,6 +1,7 @@
 package clove.compiler
 
 import clove.ast.*
+import clove.ast.ScriptTraversal.{collectStatements, existsStatement}
 import clove.dsl.{Region, Behaviour, World}
 
 object WorldAnalyser:
@@ -9,10 +10,7 @@ object WorldAnalyser:
 
     // Collect every script in the world for effect scanning
     val entityScripts = world.entities.flatMap(e => List(e.spawnScript, e.initScript, e.updateScript))
-    val triggerScripts = world.regions.flatMap {
-      case Region(_, _, _, _, _, Behaviour.Trigger(onEnter, onExit), _, _, _) => List(onEnter, onExit)
-      case _ => Nil
-    }
+
     val customEffectScripts = world.customEffects.map { e =>
       e.impl(Expr.Var("resolved"), Expr.Var("dt"))
     }
@@ -22,11 +20,9 @@ object WorldAnalyser:
       handlers.flatMap(_.impls.values).map(_.body).toList
 
     def handlersInScript(script: Script): List[Handler] =
-      script.statements.flatMap {
-        case HandleWith(h, body) => h :: handlersInScript(body)
-        case If(_, t)            => handlersInScript(t)
-        case IfElse(_, t, e)     => handlersInScript(t) ++ handlersInScript(e)
-        case _                   => Nil
+      collectStatements(script) {
+        case HandleWith(h, _) => List(h)
+        case _                => Nil
       }
 
     val allHandlers =
@@ -38,44 +34,43 @@ object WorldAnalyser:
 
     val handlerImplScripts = implBodies(allHandlers)
 
-    val allScripts = entityScripts ++ triggerScripts ++ customEffectScripts ++ handlerImplScripts
+    val allScripts = entityScripts ++ customEffectScripts ++ handlerImplScripts
 
     // Recursively collect all effects from a script
     def collectEffects(script: Script): List[Effect[?]] =
-      script.statements.flatMap {
-        case Perform(e)                        => List(e)
-        case Bind(_, e)                        => List(e)
-        case Discard(e)                        => List(e)
-        case If(_, t)                          => collectEffects(t)
-        case IfElse(_, t, e)                   => collectEffects(t) ++ collectEffects(e)
-        case HandleWith(_, body)               => collectEffects(body)
-        case _                                 => Nil
+      collectStatements(script) {
+        case Perform(e)  => List(e)
+        case Bind(_, e)  => List(e)
+        case Discard(e)  => List(e)
+        case _           => Nil
       }
 
-    // Check whether any script contains a HandleWith statement
     def hasHandleWith(script: Script): Boolean =
-      script.statements.exists {
-        case HandleWith(_, body) => true
-        case If(_, t)            => hasHandleWith(t)
-        case IfElse(_, t, e)     => hasHandleWith(t) || hasHandleWith(e)
-        case _                   => false
+      existsStatement(script) {
+        case HandleWith(_, _) => true
+        case _                => false
       }
 
     val allEffects = allScripts.flatMap(collectEffects)
 
     def uses(p: Effect[?] => Boolean): Boolean = allEffects.exists(p)
 
+    // Does the predicate hold anywhere within an expression tree
     def scanExpr(p: Expr => Boolean)(expr: Expr): Boolean =
       p(expr) || (expr match
         case Expr.BinOp(_, l, r) => scanExpr(p)(l) || scanExpr(p)(r)
         case Expr.Not(e)         => scanExpr(p)(e)
+        case Expr.Negate(e)      => scanExpr(p)(e)
+        case Expr.Ceil(e)        => scanExpr(p)(e)
+        case Expr.Floor(e)       => scanExpr(p)(e)
+        case Expr.Max(es*)       => es.exists(scanExpr(p))
+        case Expr.Min(es*)       => es.exists(scanExpr(p))
         case _                   => false)
 
     def scanScript(p: Expr => Boolean)(script: Script): Boolean =
-      script.statements.exists {
-        case If(cond, t)         => scanExpr(p)(cond) || scanScript(p)(t)
-        case IfElse(cond, t, el) => scanExpr(p)(cond) || scanScript(p)(t) || scanScript(p)(el)
-        case HandleWith(_, body) => scanScript(p)(body)
+      existsStatement(script) {
+        case If(cond, _)         => scanExpr(p)(cond)
+        case IfElse(cond, _, _)  => scanExpr(p)(cond)
         case _                   => false
       }
 
@@ -98,6 +93,7 @@ object WorldAnalyser:
     val hasHandleWithInScripts = world.entities.exists { e =>
       hasHandleWith(e.updateScript) || hasHandleWith(e.spawnScript) || hasHandleWith(e.initScript)
     }
+
     val hasBasicRegionHandlers = world.regions.exists {
       case Region(_, _, _, _, _, Behaviour.Basic(handlers), _, _, _) =>
         handlers.exists(h => h.handles.nonEmpty || h.impls.nonEmpty)
@@ -112,7 +108,6 @@ object WorldAnalyser:
       usesCamera     = uses { case _: Effect.Camera => true; case _: Effect.SetCamera => true; case _ => false },
       usesGlobals    = world.initialGlobals.nonEmpty ||
                        uses { case _: Effect.GetGlobal => true; case _: Effect.SetGlobal => true; case _ => false },
-      usesTriggers   = world.regions.exists { case Region(_, _, _, _, _, _: Behaviour.Trigger, _, _, _) => true; case _ => false },
       usesAnimations = world.entities.exists(e =>
         e.spawnScript.statements.exists {
           case Configure(SpawnConfig.SetSpritesheet(_, _, _)) => true

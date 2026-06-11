@@ -18,49 +18,38 @@ case class Discard(effect: Effect[Nothing]) extends Statement
 case class If(condition: Expr, thenBranch: Script) extends Statement
 case class IfElse(condition: Expr, thenBranch: Script, elseBranch: Script) extends Statement
 
-/* 
-TODO: look into setting orderings to have these float to the top
-update: i think having scoped effects staying where they are in terms of other effects is important
-e.g. pushing a noMove handler before trying to move
-the main question is is it safe to float things like scoped effects to the top? and performs at the bottom 
+// Note: statement order is deliberately preserved.
+// Scoped effects (HandleWith) must stay where they are written relative to
+// performs, e.g. pushing a noMove handler must happen before the move,
+// so statements are never reordered or floated
 
-also
-perform(Drown)
-showState("air")
-
-works as expeected
-
-showState("air")
-perform(Drown)
-
-only shows air of previous frame (does make sense)
-similarly
-
-val drownFast = handler("drown" -> 10.0)
-
-
-when(keyDown("w")) {
-  handleWith(drownFast)
-}
-
-perform(Drown)
-
-the above works with drowning fast
-
-perform(Drown)
-
-when(keyDown("w")) {
-  handleWith(drownFast)
-}
-
-as perform is done before the handler is on, it is not acted on the player
-
-should performs automatically float to the bottom?
-
-*/
 // Assigns a handler for a specified scope in an entity
 case class HandleWith(handler: Handler, body: Script = Script(List.empty)) extends Statement
 
 
 // Configurations for onSpawn (no coroutine yields)
 case class Configure(config: SpawnConfig) extends Statement
+
+
+// Generic script traversal
+object ScriptTraversal:
+
+  def collectStatements[A](script: Script)(extract: Statement => List[A]): List[A] =
+    script.statements.flatMap { stmt =>
+      val here = extract(stmt)
+      val nested = stmt match
+        case If(_, t)            => collectStatements(t)(extract)
+        case IfElse(_, t, e)     => collectStatements(t)(extract) ++ collectStatements(e)(extract)
+        case HandleWith(_, body) => collectStatements(body)(extract)
+        case _                   => Nil
+      here ++ nested
+    }
+
+  def existsStatement(script: Script)(p: Statement => Boolean): Boolean =
+    script.statements.exists { stmt =>
+      p(stmt) || (stmt match
+        case If(_, t)            => existsStatement(t)(p)
+        case IfElse(_, t, e)     => existsStatement(t)(p) || existsStatement(e)(p)
+        case HandleWith(_, body) => existsStatement(body)(p)
+        case _                   => false)
+    }
