@@ -10,6 +10,12 @@ import clove.dsl.{Entity, ScriptBuilder, script}
 def perform(effect: Effect[Unit])(using b: ScriptBuilder): Unit =
   b += Perform(effect)
 
+// Binds the return value of an effect that resumes with Expr
+def bind(effect: Effect[Expr])(using b: ScriptBuilder): Expr =
+  val varName = b.nextVar()
+  b += Bind(varName, effect)
+  Expr.Var(varName)
+
 // Performs an effect that resumes with a value
 def perform(effect: Effect[Expr])(using b: ScriptBuilder): Expr =
   bind(effect)
@@ -19,12 +25,6 @@ def perform(effect: CustomEffect[Unit])(using b: ScriptBuilder): Unit =
 
 def perform(effect: CustomEffect[Expr])(using b: ScriptBuilder): Expr =
   perform(effect.toEffect)
-
-// Binds the return value of an effect that resumes with Expr
-def bind(effect: Effect[Expr])(using b: ScriptBuilder): Expr =
-  val varName = b.nextVar()
-  b += Bind(varName, effect)
-  Expr.Var(varName)
 
 
 // Physics and entity effects
