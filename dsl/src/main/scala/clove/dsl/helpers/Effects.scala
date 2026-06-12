@@ -99,7 +99,7 @@ def resumeWith(value: Expr)(using b: ScriptBuilder): Unit =
 
 def propagate(): Expr = Expr.Propagate
 
-// NOTE: handleWith must be declared before perform(effect) to have the handler in the stack
+// Note: handleWith must be declared before perform(effect) to have the handler in the stack
 def handleWith(handler: Handler)(using b: ScriptBuilder): Unit =
   b += HandleWith(handler)
 

@@ -28,7 +28,7 @@ object LuaRuntime:
     else ""
 
     val getHandledRegions = if f.usesHandlers then
-      """|-- Returns effect-scope regions the entity is currently inside (used in resolve)
+      """|-- Returns effect scope regions the entity is currently inside (used in resolve)
          |local function getHandledRegions(e)
          |  local result = {}
          |  for _, region in ipairs(regions) do
@@ -59,21 +59,24 @@ object LuaRuntime:
         |$getHandledRegions""".stripMargin
 
   // Walks the handler stack, composing values via propagate()
-  // Returns (resolvedValue, firstImplFound)
   val resolveFunction: String =
     """|local function resolve(task, entityRegions, key, i, foundImpl)
+       |  -- get current point in stack
        |  local taskRegions = entityRegions[task.id] or {}
        |  local stackSize   = #task.handlerStack
        |  local regionSize  = #taskRegions
        |  i = i or (stackSize + regionSize)
+       |  -- if foundImpl then we are propagating
        |  foundImpl = foundImpl or nil
        |
        |  while i >= 1 do
        |    local entry, entryImpl
        |    if i > regionSize then
+       |      -- this is for entity pushed handlers
        |      entry     = task.handlerStack[i - regionSize][key]
        |      entryImpl = task.handlerStack[i - regionSize][key .. "_impl"]
        |    else
+       |     -- for region pushed handlers
        |      entry     = taskRegions[i] and taskRegions[i][key]
        |      entryImpl = taskRegions[i] and taskRegions[i][key .. "_impl"]
        |    end
@@ -82,6 +85,7 @@ object LuaRuntime:
        |
        |    if entry ~= nil then
        |      if type(entry) == "table" and entry.propagate then
+       |        -- propagation logic
        |        local rest, restImpl = resolve(task, entityRegions, key, i - 1, foundImpl)
        |        if foundImpl == nil then foundImpl = restImpl end
        |
@@ -95,20 +99,21 @@ object LuaRuntime:
        |        elseif entry.op == "/" then return a / b, foundImpl
        |        end
        |      else
+       |        -- not propagate, return directly
        |        return entry, foundImpl
        |      end
        |    end
        |    i = i - 1
        |  end
        |
+       |  -- fallback to world default (entity & region handlers could not fulfill request)
        |  local defaultImpl = defaultHandlers[key .. "_impl"]
        |  if foundImpl == nil then foundImpl = defaultImpl end
        |  if defaultHandlers[key] ~= nil then return defaultHandlers[key], foundImpl end
        |  return nil, foundImpl
        |end""".stripMargin
 
-  // Common dispatch pattern: resolve, then if impl call it, otherwise call default
-  // Used by built-in effect handlers to remove resolve/impl/default boilerplate.
+
   val resolveDispatchFunction: String =
     """|local function resolveDispatch(task, entityRegions, key, dt, default)
        |  local resolved, impl = resolve(task, entityRegions, key)
@@ -310,8 +315,7 @@ object LuaRuntime:
         |}""".stripMargin
 
   val spritesheetLoad: String =
-    """|    -- Spritesheet: load image and build quad table
-       |    if e.sheetPath then
+    """|    if e.sheetPath then
        |      e.sheet = love.graphics.newImage(e.sheetPath)
        |      local sheetW = e.sheet:getWidth()
        |      local sheetH = e.sheet:getHeight()

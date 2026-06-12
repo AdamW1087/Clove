@@ -110,7 +110,7 @@ private def propagationWellFormed(expr: Expr): Boolean = expr match
   case Expr.BinOp(_, l, r) =>
     val lProp = l == Expr.Propagate
     val rProp = r == Expr.Propagate
-    // exactly one side is a bare propagate, and the other side is propagate free
+    // if one side is a bare propagate, and the other side is propagate free
     if lProp && !rProp then !containsPropagation(r)
     else if rProp && !lProp then !containsPropagation(l)
     else false  // both propagate, or propagate nested deeper

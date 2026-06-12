@@ -22,7 +22,7 @@ def obsStateOf(id: String, key: String): Expr = Expr.EntityRead(id, key)
 def exists(id: String): Expr = Expr.EntityExists(id)
 
 
-// math expressions
+// Math expressions
 
 def max(exprs: Expr*): Expr  = Expr.Max(exprs*)
 def min(exprs: Expr*): Expr  = Expr.Min(exprs*)
