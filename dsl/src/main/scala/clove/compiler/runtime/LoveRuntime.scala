@@ -37,10 +37,13 @@ object LoveRuntime:
 
       r.behaviour match
         case Behaviour.Basic(handlers) =>
-          val allFields = LuaEmitter.emitHandlerFields(handlers.flatMap(_.handles), handlers.flatMap(_.impls))
           val hasHandlers = handlers.exists(h => h.handles.nonEmpty || h.impls.nonEmpty)
-          val typeFields = s"type = \"basic\", hasHandlers = $hasHandlers" +
-                            (if allFields.nonEmpty then s", $allFields" else "")
+          val handlerTables = handlers
+            .filter(h => h.handles.nonEmpty || h.impls.nonEmpty)
+            .map(h => s"{${LuaEmitter.emitHandlerFields(h.handles, h.impls)}}")
+            .mkString(", ")
+          val handlersField = if handlerTables.nonEmpty then s", handlers = {$handlerTables}" else ""
+          val typeFields = s"type = \"basic\", hasHandlers = $hasHandlers$handlersField"
           s"  {$commonFields, $typeFields}"
 
         case Behaviour.Solid(oneWay) =>
@@ -327,6 +330,9 @@ $coroutines
 $initCoroutines
 
 function love.load()
+love.window.setMode(1280, 720)
+love.graphics.setDefaultFilter("nearest", "nearest", 1)
+love.graphics.setLineStyle("rough")
 $spawnSetup
 $taskSetup
 

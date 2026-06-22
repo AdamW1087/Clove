@@ -28,12 +28,18 @@ object LuaRuntime:
     else ""
 
     val getHandledRegions = if f.usesHandlers then
-      """|-- Returns effect scope regions the entity is currently inside (used in resolve)
+      """|-- Returns effect scope regions the entity is currently inside (used in resolve)s
          |local function getHandledRegions(e)
          |  local result = {}
          |  for _, region in ipairs(regions) do
          |    if region.type == "basic" and region.hasHandlers and regionActive(region) and insideRegion(e, region) then
-         |      table.insert(result, region)
+         |      if region.handlers then
+         |        for _, h in ipairs(region.handlers) do
+         |          table.insert(result, h)
+         |        end
+         |      else
+         |        table.insert(result, region)
+         |      end
          |    end
          |  end
          |  return result
